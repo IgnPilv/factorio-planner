@@ -60,3 +60,23 @@ describe('station export', () => {
     expect(dead).toEqual([]);
   });
 });
+
+describe('city block blueprint book', () => {
+  it('holds the whole cell, then the rails and the power parts, which add up to it', async () => {
+    const { decodeJsonString } = await import('../src/blueprint/format');
+    const { blockBook } = await import('../src/cityblock/export');
+    const d = buildDesign({ ...spec, station: true });
+    const book = decodeJsonString(blockBook(d, 'X')).blueprint_book as {
+      blueprints: { index: number; blueprint: { label: string; entities: { name: string; position: { x: number; y: number }; direction?: number }[]; 'snap-to-grid': unknown; 'position-relative-to-grid': unknown } }[];
+    };
+    expect(book.blueprints.map((b) => b.blueprint.label)).toEqual(['X', 'X: rails', 'X: power and robots']);
+    const [all, rails, power] = book.blueprints.map((b) => b.blueprint);
+    expect(rails.entities.some((e) => e.name === 'substation')).toBe(false);
+    expect(power.entities.every((e) => e.name === 'substation' || e.name === 'roboport')).toBe(true);
+    expect([...rails.entities, ...power.entities].map(key).sort()).toEqual(all.entities.map(key).sort());
+    for (const b of [rails, power]) {
+      expect(b['snap-to-grid']).toEqual(all['snap-to-grid']);
+      expect(b['position-relative-to-grid']).toEqual(all['position-relative-to-grid']);
+    }
+  });
+});
