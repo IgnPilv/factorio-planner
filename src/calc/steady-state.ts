@@ -113,12 +113,22 @@ export function inserterThroughput(entity: Entity, bonuses?: ResearchBonuses): n
 }
 
 /**
- * 2.0 fluids: each flow operation between fluid boxes moves at most 100 units
- * per tick (6000/s); pipelines themselves have no length-based limit.
+ * 2.0 fluids: each input or output connection moves at most 100 units per tick
+ * (6000/s); within a pipeline segment flow is instant, whatever its length.
  */
 export const FLUID_FLOW_LIMIT = 6000;
-/** A pipeline spanning more than this many tiles in either direction stops flowing (FFF #430). */
-export const PIPELINE_MAX_EXTENT = 250;
+/**
+ * The wiki: "in practice, this limit is usually around 4200 fluid per second",
+ * because flow in and out depends on how full the segment is. Above this a
+ * connection is warned about, not capped.
+ */
+export const FLUID_FLOW_PRACTICAL = 4200;
+/**
+ * A pipeline segment spreading outside a 320×320 tile area stops flowing until
+ * a pump splits it (utility-constants default_pipeline_extent = 320; no base
+ * entity overrides it).
+ */
+export const PIPELINE_MAX_EXTENT = 320;
 
 export function inserterHandSize(entity: Entity, bonuses?: ResearchBonuses): number {
   const bonus = entity.bulk ? bonuses?.bulkInserterBonus ?? 0 : bonuses?.inserterStackBonus ?? 0;
@@ -593,7 +603,7 @@ export function simulateLayout(
         const name = `xf:${net}>${id}:${fluid}`;
         const capRow = `cap:${name}`;
         variables[name] = { [balance(`f:${net}`, fluid)]: -1, [balance(machineNode(id), fluid)]: 1, [capRow]: 1 };
-        constraints[capRow] = { max: FLUID_FLOW_LIMIT };
+        constraints[capRow] = { max: fluidNet.dead.has(net) ? 0 : FLUID_FLOW_LIMIT };
         usedRows.add(balance(`f:${net}`, fluid));
       }
     }
@@ -603,7 +613,7 @@ export function simulateLayout(
         const name = `xf:${id}>${net}:${fluid}`;
         const capRow = `cap:${name}`;
         variables[name] = { [balance(`f:${net}`, fluid)]: 1, [balance(machineNode(id), fluid)]: -1, [capRow]: 1 };
-        constraints[capRow] = { max: FLUID_FLOW_LIMIT };
+        constraints[capRow] = { max: fluidNet.dead.has(net) ? 0 : FLUID_FLOW_LIMIT };
         usedRows.add(balance(`f:${net}`, fluid));
       }
     }
@@ -622,7 +632,7 @@ export function simulateLayout(
   for (const m of machines.values()) for (const f of [...m.fluidIn.keys(), ...m.fluidOut.keys()]) allFluids.add(f);
   for (const link of fluidNet.pumps) {
     const capRow = `cap:pump:${link.id}`;
-    constraints[capRow] = { max: link.capacity };
+    constraints[capRow] = { max: fluidNet.dead.has(link.from) || fluidNet.dead.has(link.to) ? 0 : link.capacity };
     for (const fluid of allFluids) {
       const from = balance(`f:${link.from}`, fluid);
       const to = balance(`f:${link.to}`, fluid);
@@ -669,6 +679,15 @@ export function simulateLayout(
     values,
   );
   if (balanced) values = balanced;
+  for (const name of Object.keys(variables)) {
+    if (!name.startsWith('xf:') || val(name) <= FLUID_FLOW_PRACTICAL + 1e-6) continue;
+    const [, link, fluid] = /^xf:(.*):([^:]+)$/.exec(name) ?? [];
+    const machineId = link?.split('>').find((p) => machines.has(p));
+    const q = machineId ? machines.get(machineId)!.q : undefined;
+    warnings.push(
+      `${q ? `${q.e.name} at ${q.x},${q.y}` : 'A machine'} moves ${Math.round(val(name))}/s of ${fluid} through one connection; the game allows 6000/s but usually manages about ${FLUID_FLOW_PRACTICAL}/s`,
+    );
+  }
 
   // --- Results -------------------------------------------------------------
   const entities: Record<string, EntityState> = {};
@@ -959,16 +978,18 @@ function buildFluidNetworks(
     if (from && to && from !== to) pumps.push({ id: q.p.id, from, to, capacity: q.e.pumpingSpeed ?? 1200 });
     else warnings.push(`Pump at ${q.x},${q.y} is not between two pipelines`);
   }
-  // Pipelines wider than 250 tiles stop flowing.
+  // Pipelines spreading outside 320×320 tiles stop flowing.
   const extent = new Map<string, [number, number, number, number]>();
   for (const q of connectors) {
     const r = find(q.p.id);
     const b = extent.get(r) ?? [Infinity, Infinity, -Infinity, -Infinity];
     extent.set(r, [Math.min(b[0], q.x), Math.min(b[1], q.y), Math.max(b[2], q.x + q.w), Math.max(b[3], q.y + q.h)]);
   }
-  for (const [, [x0, y0, x1, y1]] of extent) {
+  const dead = new Set<string>();
+  for (const [net, [x0, y0, x1, y1]] of extent) {
     if (x1 - x0 > PIPELINE_MAX_EXTENT || y1 - y0 > PIPELINE_MAX_EXTENT) {
-      warnings.push(`A pipeline spans more than ${PIPELINE_MAX_EXTENT} tiles; in game it stops flowing (split it with a pump)`);
+      dead.add(net);
+      warnings.push(`A pipeline at ${x0},${y0} spreads outside ${PIPELINE_MAX_EXTENT}×${PIPELINE_MAX_EXTENT} tiles, so nothing flows in it (split it with a pump)`);
     }
   }
   // Pumped fluids count as offered downstream.
@@ -980,7 +1001,7 @@ function buildFluidNetworks(
     for (const f of src) dst.add(f);
   }
   const carries = (machine: string, fluid: string) => (netsOf.get(machine) ?? []).some((n) => offered.get(n)?.has(fluid));
-  return { netsOf, carries, pumps };
+  return { netsOf, carries, pumps, dead };
 }
 
 // ---------------------------------------------------------------------------

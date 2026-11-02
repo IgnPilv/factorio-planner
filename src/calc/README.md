@@ -51,10 +51,12 @@ splitter and chest, and nothing moves faster than its limit.
   inserted like any other input.
 - **Fluids**: pipes, pipe-to-ground pairs, tanks, pumps, offshore pumps,
   boilers and engines that touch form networks; other machines plug into
-  networks beside them. 2.0 pipelines have no length-based limit; each
-  machine connection moves at most 6000/s, a pump moves 1200/s one way
-  between two pipelines, and a pipeline wider than 250 tiles gets a warning
-  (it stops flowing in game).
+  networks beside them. Within a 2.0 pipeline flow is instant whatever its
+  length. Each machine connection moves at most 6000/s (the wiki notes about
+  4200/s is usual in practice, so above that a warning is given), and a pump
+  moves 1200/s one way between two pipelines. A pipeline spreading outside
+  320×320 tiles (`default_pipeline_extent`) carries nothing, as in game, until a
+  pump splits it.
 - **Power**: no generators in the layout means power is assumed to come from
   outside. Otherwise poles join within wire reach and cover their supply area;
   uncovered machines get no power, and a short network slows its machines.
