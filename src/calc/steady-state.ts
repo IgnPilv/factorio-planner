@@ -52,8 +52,11 @@ export interface TransportState {
   perSecond: number;
   /** Most it can move per second as built. */
   capacity: number;
+  /** Busiest lane's share of its capacity for belts (each lane carries half); otherwise perSecond / capacity. */
   utilization: number;
   items: Flow[];
+  /** Belts, undergrounds and splitters: what each lane carries, seen facing the way the belt moves. */
+  lanes?: { left: Flow[]; right: Flow[] };
 }
 
 export interface PowerState {
@@ -166,6 +169,13 @@ export const laneThroughput = (entity: Entity) => (entity.beltThroughput ?? 0) /
 // Geometry
 
 type Dir = 0 | 1 | 2 | 3;
+/** Belt lanes, seen facing the way the belt moves. */
+type Lane = 'L' | 'R';
+const LANES: readonly Lane[] = ['L', 'R'];
+const otherLane = (l: Lane): Lane => (l === 'L' ? 'R' : 'L');
+/** The lane on the given side (a direction) of a belt facing d, if that side is left or right. */
+const laneOnSide = (beltDir: Dir, side: Dir): Lane | undefined =>
+  side === (beltDir + 3) % 4 ? 'L' : side === (beltDir + 1) % 4 ? 'R' : undefined;
 const DX = [0, 1, 0, -1] as const;
 const DY = [-1, 0, 1, 0] as const;
 const key = (x: number, y: number) => `${x},${y}`;
@@ -249,7 +259,7 @@ interface Edge {
   from: NodeId;
   to: NodeId;
   /** Capacity row this edge counts against, if any. */
-  capRow?: string;
+  capRow?: string | string[];
   /** Items allowed through; undefined = anything. */
   accept?: Set<string>;
   /** Items never allowed through (deny-list filters, a splitter's non-filter side). */
@@ -258,6 +268,8 @@ interface Edge {
   split?: { splitter: string; dir: 'in' | 'out'; side: 'left' | 'right' };
   /** Report this edge's flow under this transport entity id. */
   report?: string;
+  /** Belt lane this edge leaves from (belt-like sources). */
+  lane?: Lane;
 }
 
 interface MachineInfo {
@@ -379,6 +391,9 @@ export function simulateLayout(
   };
 
   // --- Belts -------------------------------------------------------------
+  // Every belt tile, underground and splitter is two nodes, one per lane:
+  // `b:<id>:L` / `b:<id>:R` and `s:<id>:L` / `s:<id>:R`.
+  const isBeltNode = (n: NodeId) => n.startsWith('b:') || n.startsWith('s:');
   const undergroundRole = pairUndergrounds(placed, warnings);
   const beltCap = (q: Placed) => q.e.beltThroughput ?? 0;
 
@@ -390,72 +405,94 @@ export function simulateLayout(
     return false;
   };
 
-  /** Edge from a belt-like source moving direction d out of tile (x, y). */
-  const linkForward = (srcId: string, from: NodeId, x: number, y: number, d: Dir, cap: number, src: Placed) => {
+  /**
+   * Edges from a belt-like source moving direction d out of tile (x, y), one per
+   * lane. `cap` is the source's whole-belt throughput; each lane gets half.
+   */
+  const linkForward = (srcId: string, fromBase: NodeId, x: number, y: number, d: Dir, cap: number) => {
     const tx = x + DX[d];
     const ty = y + DY[d];
     const t = at(tx, ty);
-    const capRow = `cap:${srcId}:${x},${y}`;
+    const laneCap = cap / 2;
+    const laneRow = (ln: Lane) => {
+      const row = `cap:${srcId}:${x},${y}:${ln}`;
+      capacities.set(row, laneCap);
+      return row;
+    };
     if (!t) {
-      capacities.set(capRow, cap);
-      edges.push({ id: `${srcId}>exit@${x},${y}`, from, to: EXIT, capRow, report: srcId });
+      for (const ln of LANES) edges.push({ id: `${srcId}>exit@${x},${y}:${ln}`, from: `${fromBase}:${ln}`, to: EXIT, capRow: laneRow(ln), report: srcId, lane: ln });
       return;
     }
     const k = t.e.kind;
-    let to: NodeId | undefined;
-    let laneLimit = false;
+    let toBase: NodeId | undefined;
+    /** Side-loading: both source lanes go onto this one lane of the target. */
+    let onto: Lane | undefined;
+    /** Only this source lane gets through (side-loading an underground belt). */
+    let only: Lane | undefined;
+    // Which side of the target the source is on, seen facing the target's direction.
+    const fromSide: Lane = opposite(d) === (t.d + 3) % 4 ? 'L' : 'R';
     if (k === 'belt') {
-      if (t.d === opposite(d)) to = undefined;
-      else {
-        to = `b:${t.p.id}`;
+      if (t.d !== opposite(d)) {
+        toBase = `b:${t.p.id}`;
         if (t.d !== d) {
-          // Perpendicular: a curve if nothing feeds the target from behind and
-          // this is its only side feeder; otherwise side-loading onto one lane.
+          // Perpendicular: a curve (lanes kept) if nothing feeds the target
+          // from behind and this is its only side feeder; otherwise
+          // side-loading onto the lane on the source's side.
           const behind = at(t.x - DX[t.d], t.y - DY[t.d]);
           const straightFeed = behind && BELTS.has(behind.e.kind) && feedsInto(behind, t.x, t.y);
           const left = at(t.x + DX[(t.d + 3) % 4]!, t.y + DY[(t.d + 3) % 4]!);
           const right = at(t.x + DX[(t.d + 1) % 4]!, t.y + DY[(t.d + 1) % 4]!);
           const sideFeeds = [left, right].filter((s) => s && BELTS.has(s.e.kind) && feedsInto(s, t.x, t.y)).length;
-          laneLimit = !!straightFeed || sideFeeds > 1;
+          if (straightFeed || sideFeeds > 1) onto = fromSide;
         }
       }
     } else if (k === 'underground-belt') {
       const role = undergroundRole.get(t.p.id)?.role;
-      if (role === 'entrance' && t.d === d) to = `b:${t.p.id}`;
-      else if (role === 'entrance' && t.d !== opposite(d)) {
-        to = `b:${t.p.id}`;
-        laneLimit = true;
+      if (role === 'entrance' && t.d === d) toBase = `b:${t.p.id}`;
+      else if (role && t.d !== d && t.d !== opposite(d)) {
+        // Side-loading an underground: only the half of the tile with belt on
+        // it takes items, the half with the tunnel hood blocks them (wiki, Belt
+        // transport system). So only the source lane over the open half gets
+        // through: the upstream half of an entrance, the downstream half of an exit.
+        toBase = `b:${t.p.id}`;
+        onto = fromSide;
+        const openHalf = role === 'entrance' ? opposite(t.d) : t.d;
+        only = laneOnSide(d, openHalf);
       }
     } else if (k === 'splitter') {
-      if (t.d === d) to = `s:${t.p.id}`;
+      if (t.d === d) toBase = `s:${t.p.id}`;
     }
-    if (!to) return; // dead end: items stop here
+    if (!toBase) return; // dead end: items stop here
     const split = k === 'splitter' ? { splitter: t.p.id, dir: 'in' as const, side: splitterSide(t, tx, ty) } : undefined;
-    if (laneLimit) {
-      const lane = `cap:lane:${srcId}:${x},${y}`;
-      capacities.set(lane, Math.min(laneThroughput(src.e), laneThroughput(t.e)));
-      // One lane only; that is also below the source belt's own limit.
-      edges.push({ id: `${srcId}>${to}@${x},${y}#lane`, from, to, capRow: lane, report: srcId, split });
+    if (onto) {
+      // Both lanes merge onto one lane of the target: that lane's speed limits them together.
+      const shared = `cap:onto:${srcId}:${x},${y}`;
+      capacities.set(shared, laneThroughput(t.e));
+      for (const ln of LANES) {
+        if (only && ln !== only) continue;
+        edges.push({ id: `${srcId}>${toBase}@${x},${y}:${ln}>${onto}`, from: `${fromBase}:${ln}`, to: `${toBase}:${onto}`, capRow: [laneRow(ln), shared], report: srcId, lane: ln, split });
+      }
       return;
     }
-    capacities.set(capRow, cap);
-    edges.push({ id: `${srcId}>${to}@${x},${y}`, from, to, capRow, report: srcId, split });
+    for (const ln of LANES) edges.push({ id: `${srcId}>${toBase}@${x},${y}:${ln}`, from: `${fromBase}:${ln}`, to: `${toBase}:${ln}`, capRow: laneRow(ln), report: srcId, lane: ln, split });
   };
 
   for (const q of placed) {
     const k = q.e.kind;
     if (k === 'belt') {
       transport[q.p.id] = blankTransport('belt', beltCap(q));
-      linkForward(q.p.id, `b:${q.p.id}`, q.x, q.y, q.d, beltCap(q), q);
+      linkForward(q.p.id, `b:${q.p.id}`, q.x, q.y, q.d, beltCap(q));
     } else if (k === 'underground-belt') {
       transport[q.p.id] = blankTransport('underground-belt', beltCap(q));
       const info = undergroundRole.get(q.p.id);
       if (info?.role === 'entrance' && info.partner) {
-        const capRow = `cap:${q.p.id}`;
-        capacities.set(capRow, beltCap(q));
-        edges.push({ id: `${q.p.id}>ug`, from: `b:${q.p.id}`, to: `b:${info.partner}`, capRow, report: q.p.id });
+        for (const ln of LANES) {
+          const capRow = `cap:${q.p.id}:${ln}`;
+          capacities.set(capRow, beltCap(q) / 2);
+          edges.push({ id: `${q.p.id}>ug:${ln}`, from: `b:${q.p.id}:${ln}`, to: `b:${info.partner}:${ln}`, capRow, report: q.p.id, lane: ln });
+        }
       } else if (info?.role === 'exit') {
-        linkForward(q.p.id, `b:${q.p.id}`, q.x, q.y, q.d, beltCap(q), q);
+        linkForward(q.p.id, `b:${q.p.id}`, q.x, q.y, q.d, beltCap(q));
       }
     } else if (k === 'splitter') {
       transport[q.p.id] = blankTransport('splitter', 2 * beltCap(q));
@@ -464,7 +501,7 @@ export function simulateLayout(
       const filter = q.p.outputPriority ? q.p.filters?.[0] : undefined;
       for (const [x, y] of tilesOf(q)) {
         const before = edges.length;
-        linkForward(q.p.id, `s:${q.p.id}`, x, y, q.d, beltCap(q), q);
+        linkForward(q.p.id, `s:${q.p.id}`, x, y, q.d, beltCap(q));
         const side = splitterSide(q, x, y);
         for (const e of edges.slice(before)) {
           e.split = { splitter: q.p.id, dir: 'out', side };
@@ -496,7 +533,16 @@ export function simulateLayout(
     let reject: Set<string> | undefined;
     if (filters.length && q.p.filterMode === 'blacklist') reject = new Set(filters);
     else if (filters.length) accept = new Set(accept ? filters.filter((f) => accept!.has(f)) : filters);
-    edges.push({ id: `ins:${q.p.id}`, from: pick.node, to: drop.node, capRow, accept, reject, report: q.p.id });
+    // Belts: pick from either lane; drop onto the far lane, or onto the belt's
+    // right lane when the belt runs toward or away from the inserter (wiki,
+    // Inserters).
+    const froms = isBeltNode(pick.node) ? LANES.map((ln) => `${pick.node}:${ln}`) : [pick.node];
+    let to = drop.node;
+    if (isBeltNode(drop.node)) {
+      const near = laneOnSide(drop.q.d, opposite(q.d));
+      to = `${drop.node}:${near ? otherLane(near) : 'R'}`;
+    }
+    for (const from of froms) edges.push({ id: `ins:${q.p.id}:${from}`, from, to, capRow, accept, reject, report: q.p.id });
   }
 
   // --- Drills drop onto the tile in front ---------------------------------
@@ -506,7 +552,16 @@ export function simulateLayout(
     const target = nodeAt(x, y);
     if (!target) continue;
     const accept = target.node.startsWith('m:') ? machineAccepts(target.q.p.id) : undefined;
-    edges.push({ id: `drop:${id}`, from: machineNode(id), to: target.node, accept });
+    if (isBeltNode(target.node)) {
+      // The game places drill output just past the drill's edge
+      // (vector_to_place_result {0, -1.85} electric, {-0.35, -1.3} burner), so
+      // on the near lane of a belt across its front. On a belt running along
+      // the drill's facing, the burner drill's offset is to its left; the
+      // electric drill's is dead centre, and we assume the belt's right lane.
+      const near = laneOnSide(target.q.d, opposite(m.q.d));
+      const lane: Lane = near ?? (m.q.e.name === 'burner-mining-drill' ? (target.q.d === m.q.d ? 'L' : 'R') : 'R');
+      edges.push({ id: `drop:${id}`, from: machineNode(id), to: `${target.node}:${lane}`, accept });
+    } else edges.push({ id: `drop:${id}`, from: machineNode(id), to: target.node, accept });
   }
 
   // --- Fluids ------------------------------------------------------------
@@ -571,7 +626,7 @@ export function simulateLayout(
       if (e.split && splitPriority(e.split) === e.split.side) v.obj! += PRIORITY_WEIGHT;
       coef(v, balance(e.from, item), -1);
       if (e.to !== EXIT) coef(v, balance(e.to, item), 1);
-      if (e.capRow) coef(v, e.capRow, 1);
+      for (const row of [e.capRow ?? []].flat()) coef(v, row, 1);
       variables[name] = v;
       flowVars.push({ name, edge: e, item });
     }
@@ -744,12 +799,34 @@ export function simulateLayout(
     if (!m) itemTotals.set(fv.edge.report, (m = new Map()));
     m.set(fv.item, (m.get(fv.item) ?? 0) + f);
   }
+  // Belt lanes: what enters each lane node (from upstream, side-loads, drops).
+  const laneTotals = new Map<NodeId, Map<string, number>>();
+  for (const fv of flowVars) {
+    const to = fv.edge.to;
+    if (!isBeltNode(to)) continue;
+    const f = val(fv.name);
+    if (f <= 1e-9) continue;
+    let m = laneTotals.get(to);
+    if (!m) laneTotals.set(to, (m = new Map()));
+    m.set(fv.item, (m.get(fv.item) ?? 0) + f);
+  }
+  const asFlows = (m?: Map<string, number>) => [...(m ?? [])].map(([name, perSecond]) => ({ name, perSecond }));
+  const total = (fs: Flow[]) => fs.reduce((a, f) => a + f.perSecond, 0);
   for (const [id, t] of Object.entries(transport)) {
-    const items = [...(itemTotals.get(id) ?? [])].map(([name, perSecond]) => ({ name, perSecond }));
-    const perSecond = items.reduce((s, i) => s + i.perSecond, 0);
-    t.items = items;
-    t.perSecond = perSecond;
-    t.utilization = t.capacity > 0 ? perSecond / t.capacity : 0;
+    if (t.kind === 'inserter') {
+      t.items = asFlows(itemTotals.get(id));
+      t.perSecond = total(t.items);
+      t.utilization = t.capacity > 0 ? t.perSecond / t.capacity : 0;
+      continue;
+    }
+    const base = t.kind === 'splitter' ? `s:${id}` : `b:${id}`;
+    const left = asFlows(laneTotals.get(`${base}:L`));
+    const right = asFlows(laneTotals.get(`${base}:R`));
+    t.lanes = { left, right };
+    t.items = sumFlows([...left, ...right], 1e-9);
+    t.perSecond = total(t.items);
+    const laneCap = t.capacity / 2;
+    t.utilization = laneCap > 0 ? Math.max(total(left), total(right)) / laneCap : 0;
   }
 
   // Lab consumption becomes their "inputs".
@@ -808,7 +885,8 @@ function balanceSplitters(
   };
   for (const fv of flowVars) {
     const sp = fv.edge.split;
-    if (sp) add(`${sp.dir}:${sp.splitter}`, sp.side, fv.name);
+    // Each lane is split (and drawn) on its own, as in the game.
+    if (sp) add(`${sp.dir}:${sp.splitter}:${fv.edge.lane ?? ''}`, sp.side, fv.name);
   }
   if (sides.size === 0) return undefined;
   const vars: Record<string, Record<string, number>> = {};
