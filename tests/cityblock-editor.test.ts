@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { layoutToBlueprint } from '../src/blueprint/layout';
 import type { Blueprint } from '../src/blueprint/format';
 import { blockBlueprint } from '../src/cityblock/export';
-import { analyse, buildDesign } from '../src/cityblock/block';
+import { analyse, avoidRails, buildDesign, joinedRoboports } from '../src/cityblock/block';
+import { analyseRobots } from '../src/editor/robots';
 import { PRESETS, presetSpec } from '../src/cityblock/presets';
 import { designToLayout } from '../src/cityblock/toEditor';
 import { checkLayoutRails } from '../src/editor/railCheck';
@@ -88,4 +89,18 @@ describe('blueprints snapped to the block grid', () => {
     check(blueprint);
     check(blockBlueprint(d).json.blueprint);
   });
+});
+
+describe('one robot network across blocks', () => {
+  for (const p of PRESETS)
+    it(`${p.label}: joined roboports pass every check and form one network`, () => {
+      const base = presetSpec(p);
+      const spec = { ...base, buildings: avoidRails(base, [...base.buildings.filter((b) => b.name !== 'roboport'), ...joinedRoboports(base)]) };
+      expect(spec.buildings.filter((b) => b.name === 'roboport')).toHaveLength(joinedRoboports(base).length);
+      const result = analyse(buildDesign(spec));
+      expect(result.checks.filter((c) => c.status === 'fail' || c.status === 'warn').map((c) => c.title)).toEqual([]);
+      expect(result.checks.find((c) => c.id === 'robots-neighbours')!.title).toMatch(/One global/);
+      const layout = designToLayout(buildDesign({ ...spec, tiles: 2 }));
+      expect(analyseRobots(layout.entities).networks).toHaveLength(1);
+    });
 });

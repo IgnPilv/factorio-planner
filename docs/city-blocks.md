@@ -118,3 +118,13 @@ blocks and export the whole map, or copy the blueprint book for the empty grid.
 Every preset puts a substation in the corridor, between the two tracks,
 halfway along each block edge. The tracks keep each block's own poles more than
 a wire's reach apart, so without it every block is a separate electric network.
+
+Roboports default to one network per block: their logistics zones stop short of
+the corridors, so trains move goods between blocks. **One robot network across
+all blocks** moves the roboports to 2 tiles inside the block edges, at most 50
+apart, so the 50x50 logistics squares touch inside each block and across every
+corridor (centres 16 apart there with a 12-wide corridor).
+
+In the editor the grid comes along: the **Blocks** toggle (B) draws the rail
+corridors, the track checks flag buildings standing in them, and blueprints can
+snap to the same absolute grid as the City blocks book.

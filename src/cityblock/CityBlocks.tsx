@@ -6,7 +6,7 @@ import { gameData } from '../data';
 import { centreLine, type RailPiece } from '../rails/geometry';
 import { signalPosition } from '../rails/signals';
 import { trainStopEntity } from '../rails/blueprint';
-import { analyse, avoidRails, buildDesign, corridorSubstations, DEFAULT_SPEC, gridBuildings, type BlockSpec, type Status } from './block';
+import { analyse, avoidRails, buildDesign, corridorSubstations, DEFAULT_SPEC, gridBuildings, joinedRoboports, type BlockSpec, type Status } from './block';
 import { blockBlueprint, blockBook } from './export';
 import { constructionRect, logisticsRect, supplyRect, type Rect } from './network';
 import { designToLayout } from './toEditor';
@@ -72,6 +72,7 @@ export function CityBlocks({ onOpenInEditor }: CityBlocksProps) {
 
   const design = useMemo(() => buildDesign(spec), [spec]);
   const result = useMemo(() => analyse(design), [design]);
+  const robotsJoined = result.checks.some((c) => c.id === 'robots-neighbours' && c.title.startsWith('One global'));
   const blueprint = useMemo(() => {
     try {
       const label = `City block ${spec.pitch}x${spec.pitch}`;
@@ -228,6 +229,18 @@ export function CityBlocks({ onOpenInEditor }: CityBlocksProps) {
             }}
           />
           Drive-through station in each block
+        </label>
+        <label className="cb-check" title="Roboports near the block edges so their logistics zones touch across the rail corridors: bots can reach every block. Off: each block keeps its own network.">
+          <input
+            type="checkbox"
+            checked={robotsJoined}
+            onChange={(e) => {
+              const rest = spec.buildings.filter((b) => b.name !== 'roboport');
+              const ports = e.target.checked ? joinedRoboports(spec) : gridBuildings(spec, 0, roboN).filter((b) => b.name === 'roboport');
+              setSpec({ ...spec, buildings: avoidRails(spec, [...rest, ...ports]) });
+            }}
+          />
+          One robot network across all blocks
         </label>
         <div className="cb-pair">
           {num('locomotives', 1, 8)}
