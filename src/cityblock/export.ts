@@ -5,26 +5,16 @@
 // that corner, half the corridor tracks on the top and left, and the block's
 // buildings. Pasting the same blueprint into every grid cell rebuilds the network.
 
-import { zlibSync, strToU8 } from 'fflate';
+import { makeBlueprint, encodeBlueprintString, type Blueprint } from '../blueprint/format';
 import { railEntity, signalEntity, trainStopEntity, type BlueprintEntityLike } from '../rails/blueprint';
 import type { Design } from './block';
-
-/** Blueprint version stamp used by Factorio 2.x blueprints in the game files. */
-export const BLUEPRINT_VERSION = 562949954076673;
 
 export interface BlockBlueprint {
   entities: (BlueprintEntityLike & { entity_number: number })[];
   /** World position of the cell's top-left corner. */
   origin: { x: number; y: number };
-  json: unknown;
+  json: { blueprint: Blueprint };
   string: string;
-}
-
-export function encodeBlueprint(json: unknown): string {
-  const bytes = zlibSync(strToU8(JSON.stringify(json)), { level: 9 });
-  let bin = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return '0' + btoa(bin);
 }
 
 export function blockBlueprint(d: Design, label = 'City block'): BlockBlueprint {
@@ -47,26 +37,20 @@ export function blockBlueprint(d: Design, label = 'City block'): BlockBlueprint 
   ];
   for (const e of all) if (inCell(e.position.x, e.position.y)) out.push(e);
 
-  const entities = out.map((e, i) => ({
-    entity_number: i + 1,
-    ...e,
-    position: { x: e.position.x - ox, y: e.position.y - ox },
-  }));
   const rel = ((ox % P) + P) % P;
-  const json = {
-    blueprint: {
-      item: 'blueprint',
+  const bp = makeBlueprint(
+    out.map((e) => ({ ...e, position: { x: e.position.x - ox, y: e.position.y - ox } })),
+    {
       label,
       icons: [
         { signal: { name: 'rail' }, index: 1 },
         { signal: { name: 'substation' }, index: 2 },
       ],
-      entities,
-      'snap-to-grid': { x: P, y: P },
-      'absolute-snapping': true,
-      'position-relative-to-grid': { x: rel, y: rel },
-      version: BLUEPRINT_VERSION,
+      snapToGrid: { x: P, y: P },
+      absoluteSnapping: true,
+      positionRelativeToGrid: { x: rel, y: rel },
     },
-  };
-  return { entities, origin: { x: ox, y: ox }, json, string: encodeBlueprint(json) };
+  );
+  const entities = (bp.entities ?? []) as BlockBlueprint['entities'];
+  return { entities, origin: { x: ox, y: ox }, json: { blueprint: bp }, string: encodeBlueprintString(bp) };
 }
