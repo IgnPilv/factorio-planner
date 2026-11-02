@@ -15,7 +15,8 @@
 import { gameData } from '../data';
 import { ENTITIES } from '../editor/catalog';
 import { footprint, groupBounds, type BlockGrid, type Clipboard, type Direction, type PlacedEntity } from '../editor/model';
-import { evenFloor, isRailName, RAIL_ITEM, railValid, signalAt, type PlacedRail } from '../editor/rails';
+import { evenFloor, isRailName, RAIL_ITEM, railValid, signalAt, trainStopAt, type PlacedRail } from '../editor/rails';
+import { convertLegacyRails, legacyEnds } from './legacyRails';
 import { poleInfo } from '../editor/power';
 import {
   encodeVersion,
@@ -291,16 +292,46 @@ const LEGACY_NAMES: Record<string, string> = {
   'stack-filter-inserter': 'bulk-inserter',
 };
 
+/**
+ * Buildings from popular mods, placed as the nearest base-game building. Train
+ * stop helpers (LTN's input and output lamps) have no counterpart and are
+ * folded into the stop.
+ */
+const MOD_NAMES: Record<string, string | null> = {
+  'logistic-train-stop': 'train-stop',
+  'logistic-train-stop-input': null,
+  'logistic-train-stop-output': null,
+  'advanced-substation': 'substation',
+  'big-substation': 'substation',
+  'stack-filter-inserter': 'bulk-inserter',
+};
+
+/** Base-game building for a modded one ("substation-2" -> "substation", "assembling-machine-4" -> "assembling-machine-3"). */
+export function vanillaName(name: string): string | null | undefined {
+  if (name in MOD_NAMES) return MOD_NAMES[name];
+  const m = /^(.*?)(?:-mk)?-?(\d+)$/.exec(name);
+  if (m) {
+    if (ENTITIES[m[1]!]) return m[1]!;
+    for (let n = Number(m[2]) - 1; n >= 1; n--) if (ENTITIES[`${m[1]}-${n}`]) return `${m[1]}-${n}`;
+  }
+  return undefined;
+}
+
 export interface ImportResult {
   clipboard: Clipboard | null;
   /** Entity names the planner doesn't have (count per name). */
   unknown: Record<string, number>;
+  /** Modded buildings placed as a base-game one: "from -> to" with counts. */
+  replaced: Record<string, number>;
+  /** 1.x curve sections rebuilt with 2.0 track. */
+  railRoutes?: { rebuilt: number; failed: number; legacyPieces: number };
   label?: string;
 }
 
 /** Turn a blueprint into an editor clipboard, ready to paste. */
 export function blueprintToClipboard(bp: Blueprint): ImportResult {
   const unknown: Record<string, number> = {};
+  const replaced: Record<string, number> = {};
   // 1.1 and older use 8-way directions; 2.0 (internally 1.2 while in development) uses 16-way.
   const legacy = (bp.version ?? 0) < encodeVersion(1, 2);
   const placed: Omit<PlacedEntity, 'id'>[] = [];
@@ -317,23 +348,50 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
   const entities = legacyShift
     ? (bp.entities ?? []).map((e) => ({ ...e, position: { x: e.position.x + legacyShift, y: e.position.y + legacyShift } }))
     : (bp.entities ?? []);
+  const legacyTrack: BlueprintEntity[] = [];
+  const legacyStraights: BlueprintEntity[] = [];
   for (const be of entities) {
     const r = readRail(be, legacy);
     if (r === undefined) continue;
-    if (r) rails.push(r);
-    else lostRail(legacy ? `${be.name} (1.x diagonal or curve)` : be.name);
+    if (r) {
+      rails.push(r);
+      if (legacy) legacyStraights.push(be);
+    } else if (legacy && legacyEnds(be)) legacyTrack.push(be);
+    else lostRail(legacy ? `${be.name} (1.x)` : be.name);
+  }
+  let railRoutes: ImportResult['railRoutes'];
+  if (legacyTrack.length) {
+    // 1.x curves and diagonals: plan the same routes again with 2.0 track.
+    const conv = convertLegacyRails(legacyStraights, legacyTrack);
+    railRoutes = { rebuilt: conv.routes, failed: conv.failed, legacyPieces: conv.legacyPieces };
+    if (conv.removedStraights.size) {
+      const keep = rails.filter((_, i) => !conv.removedStraights.has(i));
+      rails.length = 0;
+      rails.push(...keep);
+    }
+    for (const a of conv.added) if (railValid(a)) rails.push(a);
+    for (let i = 0; i < conv.lostPieces; i++) lostRail('1.x curve or diagonal (could not rebuild)');
   }
   // When some track can't be read, its signals, stops and trains are left out
   // too, rather than floating beside missing track.
   for (const orig of entities) {
     if (RAIL_PIECE.test(orig.name)) continue;
-    const be = legacy && LEGACY_NAMES[orig.name] ? { ...orig, name: LEGACY_NAMES[orig.name]! } : orig;
+    let be = legacy && LEGACY_NAMES[orig.name] ? { ...orig, name: LEGACY_NAMES[orig.name]! } : orig;
+    if (!ENTITIES[be.name]) {
+      const v = vanillaName(be.name);
+      if (v === null) continue;
+      if (v) {
+        replaced[`${be.name} → ${v}`] = (replaced[`${be.name} → ${v}`] ?? 0) + 1;
+        be = { ...be, name: v };
+      }
+    }
     const def = ENTITIES[be.name];
     // Trains are not placed: they stand on track and are not part of a layout.
     // A signal stays when it still stands beside track that came through.
-    const orphan = lostTrack && RAIL_PARTS.has(def?.kind ?? '') && !(def?.kind === 'rail-signal' && signalOnTrack(rails, be));
+    const orphan = (lostTrack || !!railRoutes) && RAIL_PARTS.has(def?.kind ?? '') && !(def?.kind === 'rail-signal' && signalOnTrack(rails, be)) && !(def?.kind === 'train-stop' && stopOnTrack(rails, be));
     if (!def || def.kind === 'rolling-stock' || orphan) {
-      unknown[be.name] = (unknown[be.name] ?? 0) + 1;
+      const why = orphan && railRoutes && !lostTrack ? `${be.name} (beside 1.x curve, track rebuilt)` : be.name;
+      unknown[why] = (unknown[why] ?? 0) + 1;
       continue;
     }
     const raw = be.direction ?? 0;
@@ -355,7 +413,7 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
     Object.assign(e, readLogistics(def.kind, def.name, be));
     placed.push(e);
   }
-  if (!placed.length && !rails.length) return { clipboard: null, unknown, label: bp.label };
+  if (!placed.length && !rails.length) return { clipboard: null, unknown, replaced, railRoutes, label: bp.label };
   // Signals guard the track on their right: take their facing from the track beside them.
   if (rails.length)
     for (const e of placed) {
@@ -370,7 +428,7 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
   const b = groupBounds(placed, rails);
   const clipboard: Clipboard = { w: b.w, h: b.h, entities: placed.map((e) => ({ ...e, x: e.x - b.x, y: e.y - b.y })) };
   if (rails.length) clipboard.rails = rails.map((r) => ({ ...r, x: r.x - b.x, y: r.y - b.y }));
-  return { clipboard, unknown, label: bp.label };
+  return { clipboard, unknown, replaced, railRoutes, label: bp.label };
 }
 
 /**
@@ -394,6 +452,14 @@ function signalOnTrack(rails: readonly Omit<PlacedRail, 'id'>[], be: BlueprintEn
   if (!rails.length) return false;
   const tx = Math.floor(be.position.x), ty = Math.floor(be.position.y);
   return signalAt(rails as PlacedRail[], tx, ty, 0) !== null;
+}
+
+/** Whether a blueprint train stop stands beside imported straight track. */
+function stopOnTrack(rails: readonly Omit<PlacedRail, 'id'>[], be: BlueprintEntity): boolean {
+  if (!rails.length) return false;
+  const tx = Math.floor(be.position.x), ty = Math.floor(be.position.y);
+  const at = trainStopAt(rails as PlacedRail[], tx, ty, 0);
+  return !!at && Math.abs(at.x + 1 - be.position.x) < 0.01 && Math.abs(at.y + 1 - be.position.y) < 0.01;
 }
 
 const gameRecipeOk = (r: string) => !!gameData.recipes[r];

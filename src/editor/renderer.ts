@@ -132,6 +132,16 @@ export class GridRenderer {
     this.drawView();
   }
 
+  /** Zoom out (never in) so a w x h tile area fits on screen, keeping the screen centre. Returns the centre tile. */
+  fitArea(w: number, h: number): [number, number] {
+    const { width, height } = this.app.screen;
+    const fit = 0.85 * Math.min(width / (w * TILE), height / (h * TILE));
+    const z0 = this.camera.zoom;
+    const z1 = Math.min(z0, Math.max(0.1, fit));
+    this.zoomAt(width / 2, height / 2, z1 / z0);
+    return this.screenToTile(width / 2, height / 2);
+  }
+
   panBy(dx: number, dy: number) {
     this.camera.x -= dx / this.camera.zoom;
     this.camera.y -= dy / this.camera.zoom;
