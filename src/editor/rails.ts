@@ -249,6 +249,43 @@ export function signalDirectionAt(rails: readonly PlacedRail[], tx: number, ty: 
   return null;
 }
 
+/** Rail ends on 45° track, keyed "x,y|axis". */
+function diagonalJoints(rails: readonly PlacedRail[]): Set<string> {
+  const out = new Set<string>();
+  for (const r of rails) {
+    const p = railPiece(r);
+    for (const e of [p.a, p.b]) if (mod16(e.dir) % 4 === 2) out.add(`${e.x},${e.y}|${mod16(e.dir) % 8}`);
+  }
+  return out;
+}
+
+const DIAG: Record<number, [number, number]> = { 2: [1, -1], 6: [1, 1], 10: [-1, 1], 14: [-1, -1] };
+
+/**
+ * Facing for a signal on tile (tx, ty): on straight track like signalDirectionAt,
+ * or on 45° track, where the signal stands one tile right and one tile along
+ * from the joint diagonally (as in the game's blueprints) and faces one of the
+ * diagonal directions. `diagonal` means the 16-way facing is direction * 4 + 2.
+ */
+export function signalAt(rails: readonly PlacedRail[], tx: number, ty: number, preferred: number): { direction: number; diagonal: boolean } | null {
+  const straight = signalDirectionAt(rails, tx, ty, preferred);
+  if (straight !== null) return { direction: straight, diagonal: false };
+  const joints = diagonalJoints(rails);
+  const cx = tx + 0.5, cy = ty + 0.5;
+  for (let i = 0; i < 4; i++) {
+    const facing = mod16((preferred + i) * 4 + 2);
+    const travel = opposite(facing);
+    const [fx, fy] = DIAG[travel]!;
+    const [rx, ry] = [-fy, fx];
+    const jx = cx - rx - fx * 0.5, jy = cy - ry - fy * 0.5;
+    if (joints.has(`${jx},${jy}|${travel % 8}`)) return { direction: (facing - 2) / 4, diagonal: true };
+  }
+  return null;
+}
+
+/** 16-way facing of a signal building. */
+export const signalFacing = (e: { direction: number; diagonal?: boolean }) => e.direction * 4 + (e.diagonal ? 2 : 0);
+
 /**
  * Top-left tile and direction for a train stop near the cursor tile, standing on
  * the right of straight track at a rail joint, or null when there is none.
