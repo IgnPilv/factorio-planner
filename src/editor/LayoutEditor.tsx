@@ -28,6 +28,8 @@ import {
 } from './model';
 import { MachineSettings } from './MachineSettings';
 import { BlueprintDialog, type BlueprintDialogMode } from './BlueprintDialog';
+import { LibraryDialog } from './LibraryDialog';
+import { loadDesigns, saveDesigns, type Design } from '../blueprint/library';
 import { computeLayoutRates, simulateLayout, type ResearchState, type SteadyStateResult } from '../calc';
 import { gameData } from '../data';
 import { FlowState, MachineRates, PowerSummary, ProductionSummary, QuickSearch, SimSummary } from './Panels';
@@ -121,6 +123,9 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
   const [showWires, setShowWires] = useState(() => readPref('wires', true));
   const [showCoverage, setShowCoverage] = useState(() => readPref('coverage', false));
   const [bpDialog, setBpDialog] = useState<BlueprintDialogMode | null>(null);
+  const [designs, setDesigns] = useState<Design[]>(() => loadDesigns());
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  useEffect(() => saveDesigns(designs), [designs]);
   useEffect(() => writePref('wires', showWires), [showWires]);
   useEffect(() => writePref('coverage', showCoverage), [showCoverage]);
   const [showRobots, setShowRobots] = useState(() => readPref('robots', true));
@@ -715,6 +720,9 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
           <button onClick={() => setBpDialog({ kind: 'import' })} title="Paste a blueprint string from Factorio (or just Ctrl+V it)">
             Import blueprint
           </button>
+          <button onClick={() => setLibraryOpen(true)} title="Saved designs and blueprint books">
+            Designs{designs.length ? ` (${designs.length})` : ''}
+          </button>
           <input ref={fileInput} type="file" accept="application/json,.json" hidden onChange={(e) => e.target.files?.[0] && importJson(e.target.files[0])} />
           <button
             onClick={() => {
@@ -818,6 +826,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
                 Copy
               </button>
               <button onClick={openBlueprintExport} title="Copy as a Factorio blueprint string (Ctrl+B)">Blueprint</button>
+              <button onClick={() => setLibraryOpen(true)} title="Save the selection as a named design">Save design</button>
               <button
                 onClick={() => {
                   apply(removeEntities(layout, selection));
@@ -840,6 +849,18 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
         )}
       </aside>
       {bpDialog && <BlueprintDialog mode={bpDialog} onClose={() => setBpDialog(null)} onImport={importBlueprint} />}
+      {libraryOpen && (
+        <LibraryDialog
+          designs={designs}
+          onChange={setDesigns}
+          selection={layout.entities.filter((e) => selection.includes(e.id))}
+          onPlace={(cb, name) => {
+            setLibraryOpen(false);
+            importBlueprint(cb, `"${name}", ${cb.entities.length} buildings`);
+          }}
+          onClose={() => setLibraryOpen(false)}
+        />
+      )}
     </div>
   );
 }
