@@ -82,6 +82,14 @@ Not yet confirmed in game: how `position-relative-to-grid` lines the cell up
 with the world grid. If a pasted cell lands off by a few tiles, the cell's contents
 are still right; only the grid offset needs adjusting.
 
+### Blueprint book
+
+"Copy blueprint book" gives a book with three blueprints: the whole cell, the rails,
+signals and train stops alone, and the substations and roboports alone. They share the
+same snap-to-grid size and grid offset, and every entity keeps its cell coordinates, so
+the parts line up with each other wherever they are pasted. You can lay the rail grid
+first and add power and robots to each block later.
+
 ## Drive-through station
 
 Ticking **Drive-through station** adds one to every block. Trains on the top

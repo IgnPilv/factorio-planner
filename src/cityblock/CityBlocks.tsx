@@ -7,7 +7,7 @@ import { centreLine, type RailPiece } from '../rails/geometry';
 import { signalPosition } from '../rails/signals';
 import { trainStopEntity } from '../rails/blueprint';
 import { analyse, avoidRails, buildDesign, DEFAULT_SPEC, gridBuildings, type BlockSpec, type Status } from './block';
-import { blockBlueprint } from './export';
+import { blockBlueprint, blockBook } from './export';
 import { constructionRect, logisticsRect, supplyRect, type Rect } from './network';
 import './cityblock.css';
 
@@ -81,20 +81,21 @@ export function CityBlocks() {
   const result = useMemo(() => analyse(design), [design]);
   const blueprint = useMemo(() => {
     try {
-      return { ok: true as const, ...blockBlueprint(design, `City block ${spec.pitch}x${spec.pitch}`) };
+      const label = `City block ${spec.pitch}x${spec.pitch}`;
+      return { ok: true as const, ...blockBlueprint(design, label), book: blockBook(design, label) };
     } catch (e) {
       return { ok: false as const, error: String(e) };
     }
   }, [design, spec.pitch]);
-  const [copied, setCopied] = useState(false);
-  const copyBlueprint = async () => {
+  const [copied, setCopied] = useState<'' | 'cell' | 'book'>('');
+  const copyBlueprint = async (what: 'cell' | 'book') => {
     if (!blueprint.ok) return;
     try {
-      await navigator.clipboard.writeText(blueprint.string);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      await navigator.clipboard.writeText(what === 'book' ? blueprint.book : blueprint.string);
+      setCopied(what);
+      setTimeout(() => setCopied(''), 1500);
     } catch {
-      setCopied(false);
+      setCopied('');
     }
   };
 
@@ -239,12 +240,19 @@ export function CityBlocks() {
         <h3>Blueprint</h3>
         {blueprint.ok ? (
           <>
-            <button onClick={copyBlueprint}>{copied ? 'Copied' : 'Copy blueprint string'}</button>
+            <div className="cb-pair">
+              <button onClick={() => copyBlueprint('cell')}>{copied === 'cell' ? 'Copied' : 'Copy blueprint string'}</button>
+              <button onClick={() => copyBlueprint('book')}>{copied === 'book' ? 'Copied' : 'Copy blueprint book'}</button>
+            </div>
             <textarea className="cb-bp" readOnly value={blueprint.string} onFocus={(e) => e.target.select()} />
             <p className="cb-note">
               One {spec.pitch}x{spec.pitch} cell: {blueprint.entities.length} entities (dashed blue square on the map: the junction at its top-left corner,
               the top and left tracks, and the block's buildings). It snaps to an absolute {spec.pitch}x{spec.pitch} grid;
               paste it into every cell to build the network.
+            </p>
+            <p className="cb-note">
+              The book holds the whole cell, the rails and signals alone, and the substations and roboports alone. All
+              three snap to the same grid, so you can lay track first and power the blocks later.
             </p>
           </>
         ) : (
