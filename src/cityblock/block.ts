@@ -26,6 +26,8 @@ export interface BlockSpec {
   corridor: number;
   /** Add 4-way junctions (all left and right turns) where corridors cross. */
   junctions: boolean;
+  /** Add a drive-through train station inside every block. */
+  station: boolean;
   /** Train used for station and block-length checks. */
   locomotives: number;
   wagons: number;
@@ -41,6 +43,7 @@ export const DEFAULT_SPEC: BlockSpec = {
   trackSpacing: 6,
   corridor: 12,
   junctions: true,
+  station: false,
   locomotives: 1,
   wagons: 4,
   buildings: [],
@@ -77,6 +80,42 @@ export interface Design {
   nodes: Node[];
   /** Distance from a junction centre to its entry and exit signals. */
   junctionReach: number;
+  /** Train stops: the rail joint the train front stops at, and the travel heading. */
+  stops: { x: number; y: number; dir: 0 | 4 | 8 | 12; block: string }[];
+  /** Rail signals turned into chain signals because the block after them is shorter than a train. */
+  chained: string[];
+  /** Ids of the station's own rail pieces. */
+  stationPieces: Set<string>;
+  /** Per block station layout, when enabled (relative to the block's grid corner). */
+  station?: StationLayout;
+}
+
+/**
+ * A drive-through station: trains on the top corridor's eastbound track turn right
+ * into the block, run south along the platform, and turn left onto the bottom
+ * corridor's eastbound track (crossing its westbound track on the level).
+ */
+export interface StationLayout {
+  /** Fork on the top eastbound track, relative to the block corner. */
+  forkX: number;
+  /** Platform track x and its first and last joint (y), relative to the block corner. */
+  platformX: number;
+  platformY0: number;
+  platformY1: number;
+  /** Usable length from the platform entry signal to the stop. */
+  platformLength: number;
+  /** Rightmost x the station's signals reach on the bottom corridor. */
+  reachX: number;
+}
+
+export function stationLayout(spec: BlockSpec, reach: number): StationLayout {
+  const h = spec.trackSpacing / 2;
+  // Fork one joint after the corner junction's exit signal (signals stay off fork joints).
+  const forkX = reach + 2;
+  const platformX = forkX + 13;
+  const platformY0 = h + 13;
+  const platformY1 = spec.pitch + h - 13;
+  return { forkX, platformX, platformY0, platformY1, platformLength: platformY1 - 2 - platformY0, reachX: platformX + 21 };
 }
 
 const rot = (dx: number, dy: number, q: number): [number, number] => {
@@ -138,6 +177,55 @@ export function buildDesign(spec: BlockSpec): Design {
     }
   }
 
+  // Drive-through station in every block.
+  const stops: Design['stops'] = [];
+  const stationPieces = new Set<string>();
+  const st = spec.station ? stationLayout(spec, reach) : undefined;
+  if (st) {
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const bx = lines[i];
+      const by = lines[j];
+      const block = `b${i}.${j}`;
+      const X = bx + st.platformX;
+      const y0 = by + st.platformY0;
+      const y1 = by + st.platformY1;
+      const own = [
+        ...path({ x: bx + st.forkX, y: by + h, dir: 4 }, TURN_90),
+        ...straightRun({ x: X, y: y0, dir: 8 }, (y1 - y0) / 2),
+        ...path({ x: X, y: y1, dir: 8 }, TURN_90.map(() => -1 as const)),
+      ];
+      own.forEach((p) => stationPieces.add(p.id));
+      pieces.push(...own);
+      const sig = (kind: 'rail' | 'chain', x: number, y: number, dir: number) => signals.push({ id: `s${sid++}`, kind, x, y, dir });
+      // The fork shares the corner junction's exit joint; trains are let onto the
+      // platform by a rail signal and leave it through a chain signal, since the
+      // way out merges and crosses the bottom corridor. Short blocks are turned
+      // into chain signals below.
+      sig('rail', X, y0, 8);
+      sig('chain', X, y1, 8);
+      sig('chain', X + 17, by + P - h, 12);
+      sig('rail', X + 21, by + P + h, 4);
+      stops.push({ x: X, y: y1 - 2, dir: 8, block });
+    }
+  }
+
+  // A rail signal whose block is shorter than the train would let a waiting train
+  // stick back into the junction behind it: make it a chain signal so trains wait
+  // before the junction instead.
+  const train = trainLength(spec.locomotives + spec.wagons, carPitch(
+    gameData.entities['cargo-wagon']?.jointDistance, gameData.entities['cargo-wagon']?.connectionDistance));
+  const chained: string[] = [];
+  if (spec.junctions || st) {
+    for (let pass = 0; pass < 2; pass++) {
+      const ids = new Set(analyseSignals(pieces, signals, train).issues.map((i) => i.signalId).filter(Boolean));
+      if (ids.size === 0) break;
+      for (const sg of signals) if (ids.has(sg.id) && sg.kind === 'rail') {
+        sg.kind = 'chain';
+        chained.push(sg.id);
+      }
+    }
+  }
+
   const inner: Rect[] = [];
   const nodes: Node[] = [];
   const c = spec.corridor / 2;
@@ -148,7 +236,7 @@ export function buildDesign(spec: BlockSpec): Design {
     spec.buildings.forEach((b, k) => nodes.push({ id: `b${i}.${j}.${k}`, name: b.name, x: bx + b.x, y: by + b.y }));
   }
   const centre = Math.floor(n / 2) * n + Math.floor(n / 2);
-  return { spec, area, inner, centre, pieces, signals, nodes, junctionReach: reach };
+  return { spec, area, inner, centre, pieces, signals, nodes, junctionReach: reach, stops, station: st, chained, stationPieces };
 }
 
 // ---------- checks ----------
@@ -229,7 +317,9 @@ export function analyse(d: Design): Analysis {
     add({
       id: 'signals', group: 'Rails', status: bad.length ? 'warn' : 'pass',
       title: bad.length ? `${bad.length} signal problems` : 'Junctions use chain signals in, rail signals out',
-      detail: bad.length ? [...new Set(bad.map((i) => i.message))].join(' ') : `Each junction is one block reaching ${d.junctionReach} tiles from its centre.`,
+      detail: bad.length ? [...new Set(bad.map((i) => i.message))].join(' ')
+        : `Each junction is one block reaching ${d.junctionReach} tiles from its centre.` +
+          (d.chained.length ? ` In the 3x3 patch, ${d.chained.length} exits are chain signals because the track after them is shorter than the train, so trains wait before the junction instead of inside it.` : ''),
     });
     const between = P - 2 * d.junctionReach;
     add({
@@ -239,14 +329,18 @@ export function analyse(d: Design): Analysis {
         : 'Junctions overlap: the pitch is too small for two junctions',
       detail: between >= train
         ? 'A train waiting at the next junction fits between them without blocking the one behind it.'
-        : `A ${spec.locomotives}-${spec.wagons} train stopped at a junction would stick back into the previous one. Use a pitch of at least ${2 * d.junctionReach + train}, shorter trains, or T-junctions spaced further apart.`,
+        : `A ${spec.locomotives}-${spec.wagons} train stopped at a junction would stick back into the previous one, so those exits are chain signals: trains wait before the junction instead, which costs throughput. A pitch of at least ${2 * d.junctionReach + train} avoids it.`,
     });
   }
   const occupied = new Set<string>();
-  for (const p of d.pieces) for (const k of footprintTiles(p)) occupied.add(k);
+  const junctionTiles = new Set<string>();
+  for (const p of d.pieces) for (const k of footprintTiles(p)) {
+    occupied.add(k);
+    if (!d.stationPieces.has(p.id)) junctionTiles.add(k);
+  }
   const innerC = d.inner[d.centre];
   let railInInner = 0;
-  for (const k of occupied) {
+  for (const k of junctionTiles) {
     const [x, y] = k.split(',').map(Number);
     if (x >= innerC.x0 && x < innerC.x1 && y >= innerC.y0 && y < innerC.y1) railInInner++;
   }
@@ -348,13 +442,33 @@ export function analyse(d: Design): Analysis {
   }
 
   // ----- Trains / stations -----
-  const innerSide = P - spec.corridor;
-  const need = train + 13 + 2; // a radius-13 turn into the block plus a signal joint
-  add({
-    id: 'station-fit', group: 'Trains', status: innerSide >= need ? 'pass' : 'fail',
-    title: `A ${spec.locomotives}-${spec.wagons} station needs about ${need} tiles, the inner side is ${innerSide}`,
-    detail: `The train is ${train} tiles (${cars} cars at ${carPitch()} tiles each, minus the last gap). Turning off the corridor takes a radius-13 curve, about 13 tiles, before the platform can start.`,
-  });
+  if (d.station) {
+    const st = d.station;
+    const fits = st.platformLength >= train;
+    add({
+      id: 'station-fit', group: 'Trains', status: fits ? 'pass' : 'fail',
+      title: `Station platform ${st.platformLength} tiles, the ${spec.locomotives}-${spec.wagons} train needs ${train}`,
+      detail: fits
+        ? 'The whole train stops between the platform entry signal and the stop, clear of both corridors.'
+        : `Make the block at least ${P + train - st.platformLength} tiles or use a shorter train.`,
+    });
+    const clear = !spec.junctions || st.reachX + 2 <= P - d.junctionReach;
+    add({
+      id: 'station-junction', group: 'Trains', status: clear ? 'pass' : 'fail',
+      title: clear ? 'Station fork and merge stay clear of the junctions' : 'Station merge runs into the next junction',
+      detail: clear
+        ? `The station joins the corridor ${st.forkX} tiles after one junction and leaves its last signal ${P - d.junctionReach - st.reachX} tiles before the next.`
+        : `The station's exit signals reach ${st.reachX} tiles into the block but the next junction starts at ${P - d.junctionReach}. Use a pitch of at least ${st.reachX + 2 + d.junctionReach}.`,
+    });
+  } else {
+    const innerSide = P - spec.corridor;
+    const need = train + 13 + 2; // a radius-13 turn into the block plus a signal joint
+    add({
+      id: 'station-fit', group: 'Trains', status: innerSide >= need ? 'pass' : 'fail',
+      title: `A ${spec.locomotives}-${spec.wagons} station needs about ${need} tiles, the inner side is ${innerSide}`,
+      detail: `The train is ${train} tiles (${cars} cars at ${carPitch()} tiles each, minus the last gap). Turning off the corridor takes a radius-13 curve, about 13 tiles, before the platform can start. Tick "Station" to lay one out.`,
+    });
+  }
 
   return { checks, powerGaps: cov.gaps, logisticsGaps: lcov.gaps, wires, railInInner, powerGroups, robotGroups };
 }
@@ -376,4 +490,29 @@ function minAxisGap(a: Node[], b: Node[]) {
     best = Math.min(best, Math.max(gx, gy));
   }
   return best;
+}
+
+/** Move buildings that would sit on the block's rails sideways off the track (smallest shift first). */
+export function avoidRails(spec: BlockSpec, buildings: BlockSpec['buildings']): BlockSpec['buildings'] {
+  const d = buildDesign({ ...spec, buildings: [] });
+  const k = Math.floor(spec.tiles / 2);
+  const corner = k * spec.pitch + spec.offset;
+  const occupied = new Set<string>();
+  for (const p of d.pieces) for (const t of footprintTiles(p)) occupied.add(t);
+  const hits = (b: { name: string; x: number; y: number }) => {
+    const r = bodyRect({ id: '', name: b.name, x: corner + b.x, y: corner + b.y });
+    for (let x = Math.floor(r.x0) - 1; x < r.x1 + 1; x++)
+      for (let y = Math.floor(r.y0) - 1; y < r.y1 + 1; y++) if (occupied.has(`${x},${y}`)) return true;
+    return false;
+  };
+  const shifts: [number, number][] = [];
+  for (let s = 1; s <= 8; s++) shifts.push([s, 0], [-s, 0], [0, s], [0, -s]);
+  return buildings.flatMap((b) => {
+    if (!hits(b)) return [b];
+    for (const [dx, dy] of shifts) {
+      const m = { ...b, x: b.x + dx, y: b.y + dy };
+      if (!hits(m)) return [m];
+    }
+    return [];
+  });
 }
