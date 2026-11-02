@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { gameData } from '../data';
 import { CityBlocks } from '../cityblock/CityBlocks';
-import { LayoutEditor } from '../editor/LayoutEditor';
+import { LayoutEditor, type EditorIncoming } from '../editor/LayoutEditor';
 import { DataBrowser } from './DataBrowser';
 import { useIconsVersion } from './GameIcon';
 import { IconsPanel } from './IconsPanel';
@@ -18,6 +18,7 @@ export function App() {
   useIconsVersion();
   const [researchSettings, setResearchSettings] = useResearchSettings();
   const research = useMemo(() => toResearchState(gameData, researchSettings), [researchSettings]);
+  const [incoming, setIncoming] = useState<EditorIncoming | null>(null);
   return (
     <div className="app">
       <header className="topbar">
@@ -40,11 +41,16 @@ export function App() {
       {iconsOpen && <IconsPanel onClose={() => setIconsOpen(false)} />}
       {/* The editor stays mounted so its camera and undo history survive a tab switch. */}
       <div className="view" hidden={view !== 'layout'}>
-        <LayoutEditor research={research} />
+        <LayoutEditor research={research} incoming={incoming} />
       </div>
       {view === 'blocks' && (
         <div className="view">
-          <CityBlocks />
+          <CityBlocks
+            onOpenInEditor={(layout, note) => {
+              setIncoming((prev) => ({ layout, note, seq: (prev?.seq ?? 0) + 1 }));
+              setView('layout');
+            }}
+          />
         </div>
       )}
       {view === 'data' && (

@@ -62,3 +62,18 @@
 .cb-bp { flex: none; width: 100%; height: 56px; min-height: 56px; margin-top: 4px; font: 11px/1.3 ui-monospace, monospace; background: #151515; color: #bbb; border: 1px solid #444; border-radius: 4px; resize: vertical; word-break: break-all; }
 .cb-cell { fill: none; stroke: #7fdcff; stroke-width: 0.5; stroke-dasharray: 3 2; }
 .cb-stop { fill: #e04a4a; stroke: #000; stroke-width: 0.1; }
+.cb-side { width: 280px; }
+.cb-presets { display: flex; flex-direction: column; gap: 4px; }
+.cb .cb-preset { display: flex; flex-direction: column; align-items: flex-start; text-align: left; padding: 6px 8px; gap: 2px; }
+.cb-preset span { font-size: 11px; color: #aaa; }
+.cb .cb-primary { background: #d8a93a; color: #1b1b1b; border-color: #d8a93a; font-weight: 600; padding: 8px; }
+.cb .cb-primary:hover { background: #e8b94a; }
+.cb .cb-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.cb-use { display: flex; flex-direction: column; gap: 6px; }
+.cb-pair-row { display: flex; gap: 4px; }
+.cb-advanced { margin-top: 10px; border-top: 1px solid #333; padding-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.cb-advanced summary { cursor: pointer; color: #ccc; margin-bottom: 6px; }
+.cb-advanced h4 { margin: 10px 0 4px; font-size: 12px; color: #ccc; }
+.cb-verdict { font-weight: 600; color: #6fdc8c; margin: 4px 0 10px; }
+.cb-verdict-bad { color: #ffb74d; }
+.cb-checks details summary { cursor: pointer; color: #aaa; margin: 10px 0 4px; }
