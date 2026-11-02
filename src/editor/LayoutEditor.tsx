@@ -45,7 +45,7 @@ import { analyseRobots, isRoboportName, nodeOf, robotOverlay } from './robots';
 import { computeUnlocks, entityUnlocked, recipeUnlocked } from './unlocks';
 import type { SearchHit } from './search';
 import { buildBadges, buildViewOverlay, type ViewMode } from './views';
-import { GridRenderer } from './renderer';
+import { GridRenderer, TILE } from './renderer';
 import { entityContents } from './contents';
 import { checkLayoutRails, type RailCheck } from './railCheck';
 import { planRail, railFromPiece, railStartAt, signalAt, trainStopAt } from './rails';
@@ -259,7 +259,10 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL, incoming }
     requestAnimationFrame(() => {
       if (!r?.canvas) return;
       r.app.resize();
-      r.camera.zoom = 0.25;
+      // Fit the whole track on screen.
+      const { width, height } = r.app.screen;
+      const w = Math.max(...xs) - Math.min(...xs) + 8, h = Math.max(...ys) - Math.min(...ys) + 8;
+      r.camera.zoom = Math.min(1, Math.max(0.1, 0.95 * Math.min(width / (w * TILE), height / (h * TILE))));
       r.centerOn(cx, cy);
     });
     setMessage(`Opened ${incoming.note}. Ctrl+Z goes back to your previous map.`);

@@ -28,6 +28,8 @@ export interface BlockSpec {
   junctions: boolean;
   /** Add a drive-through train station inside every block. */
   station: boolean;
+  /** Close every corridor at the edge of the patch with a turnaround loop, so trains can drive the whole network. */
+  edgeLoops?: boolean;
   /** Train used for station and block-length checks. */
   locomotives: number;
   wagons: number;
@@ -155,6 +157,14 @@ const rot = (dx: number, dy: number, q: number): [number, number] => {
 };
 
 /** Lay the rails, signals and buildings of a tiles x tiles patch. */
+/**
+ * Balloon loop that turns a train round onto the other track of its corridor:
+ * 45° right, one diagonal, 270° left, one diagonal, 45° right. With a track
+ * spacing of 6 it ends exactly on the opposite track; it reaches 34 tiles out
+ * and 13 to each side of the corridor centre.
+ */
+export const EDGE_LOOP: (-1 | 0 | 1)[] = [1, 1, 0, ...Array<-1>(12).fill(-1), 0, 1, 1];
+
 export function buildDesign(spec: BlockSpec): Design {
   const { pitch: P, offset: o, tiles: n } = spec;
   const h = spec.trackSpacing / 2;
@@ -166,19 +176,37 @@ export function buildDesign(spec: BlockSpec): Design {
   const signals: Signal[] = [];
   let sid = 0;
 
+  // Junctions: from each approach a right turn (13 + h before the centre) and a left turn (13 - h before).
+  const reach = 13 + h + 2;
+
   // Straight tracks: right-hand traffic. Each run starts on the joint parity its heading needs.
+  // With edge loops they run on past the outer junctions to the loops.
   const even = (v: number) => (Math.abs(v % 2) === 0 ? v : v + 1);
+  const loops = !!spec.edgeLoops && spec.trackSpacing === 6;
+  const ext = loops ? reach : 0;
+  const runLo = loops ? 2 * Math.floor((lo - ext) / 2) : even(lo);
+  const runHi = loops ? runLo + 2 * Math.ceil((hi + ext - runLo) / 2) : hi;
   for (const L of lines) {
-    const y0 = even(lo);
-    const count = Math.floor((hi - y0) / 2);
+    const y0 = runLo;
+    const count = Math.floor((runHi - y0) / 2);
     pieces.push(...straightRun({ x: L + h, y: y0 + count * 2, dir: 0 }, count)); // northbound, east side
     pieces.push(...straightRun({ x: L - h, y: y0, dir: 8 }, count)); // southbound, west side
     pieces.push(...straightRun({ x: y0, y: L + h, dir: 4 }, count)); // eastbound, south side
     pieces.push(...straightRun({ x: y0 + count * 2, y: L - h, dir: 12 }, count)); // westbound, north side
   }
 
-  // Junctions: from each approach a right turn (13 + h before the centre) and a left turn (13 - h before).
-  const reach = 13 + h + 2;
+  // Turnaround loops: out on one track, a balloon loop, back on the other.
+  if (loops) {
+    const end = runLo + 2 * Math.floor((runHi - runLo) / 2);
+    for (const L of lines) {
+      pieces.push(...path({ x: end, y: L + h, dir: 4 }, EDGE_LOOP));
+      pieces.push(...path({ x: runLo, y: L - h, dir: 12 }, EDGE_LOOP));
+      pieces.push(...path({ x: L - h, y: end, dir: 8 }, EDGE_LOOP));
+      pieces.push(...path({ x: L + h, y: runLo, dir: 0 }, EDGE_LOOP));
+    }
+  }
+  const inLo = lo - ext, inHi = hi + ext;
+
   if (spec.junctions) {
     for (const X of lines) for (const Y of lines) {
       for (let q = 0; q < 4; q++) {
@@ -194,15 +222,15 @@ export function buildDesign(spec: BlockSpec): Design {
           const e = t[t.length - 1]?.b;
           const s = t[0]?.a;
           if (!e || !s) continue;
-          const inside = (p: { x: number; y: number }) => p.x >= lo && p.x <= hi && p.y >= lo && p.y <= hi;
+          const inside = (p: { x: number; y: number }) => p.x >= inLo && p.x <= inHi && p.y >= inLo && p.y <= inHi;
           if (inside(e) && inside(s)) pieces.push(...t);
         }
         // Chain signal on the approach before the first fork, rail signal on the exit after the last merge.
         const entry = at(h, reach);
         const exit = at(h, -reach);
-        if (entry.y >= lo && entry.y <= hi && entry.x >= lo && entry.x <= hi)
+        if (entry.y >= inLo && entry.y <= inHi && entry.x >= inLo && entry.x <= inHi)
           signals.push({ id: `s${sid++}`, kind: 'chain', x: entry.x, y: entry.y, dir });
-        if (exit.y >= lo && exit.y <= hi && exit.x >= lo && exit.x <= hi)
+        if (exit.y >= inLo && exit.y <= inHi && exit.x >= inLo && exit.x <= inHi)
           signals.push({ id: `s${sid++}`, kind: 'rail', x: exit.x, y: exit.y, dir });
       }
     }

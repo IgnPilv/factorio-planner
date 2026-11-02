@@ -104,3 +104,23 @@ describe('one robot network across blocks', () => {
       expect(analyseRobots(layout.entities).networks).toHaveLength(1);
     });
 });
+
+describe('turnaround loops at the city edge', () => {
+  for (const p of PRESETS)
+    it(`${p.label}: a closed network with no open ends that passes every check`, () => {
+      const spec = { ...presetSpec(p), edgeLoops: true };
+      const result = analyse(buildDesign(spec));
+      expect(result.checks.filter((c) => c.status === 'fail' || c.status === 'warn').map((c) => `${c.title}: ${c.detail}`)).toEqual([]);
+      for (const tiles of [1, 2]) {
+        const layout = designToLayout(buildDesign({ ...spec, tiles }));
+        const check = checkLayoutRails(layout)!;
+        expect(check.issues.map((i) => i.message)).toEqual([]);
+        expect(check.deadEnds).toEqual([]);
+        expect(check.edgeEnds).toEqual([]);
+        for (const e of layout.entities) {
+          const others = layout.entities.filter((o) => o !== e);
+          expect(canPlace(buildOccupancy(others, layout.rails), new Set(), e.name, e.x, e.y, e.direction).ok, `${e.name} at ${e.x},${e.y}`).toBe(true);
+        }
+      }
+    });
+});
