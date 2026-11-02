@@ -13,11 +13,11 @@ describe('rate engine on real game data', () => {
     expect(3 * flow(cable.outputs, 'copper-cable')).toBeCloseTo(2 * flow(circuit.inputs, 'copper-cable'));
   });
 
-  it('1 offshore pump : 20 boilers : 40 steam engines', () => {
+  it('1 offshore pump : 200 boilers : 400 steam engines (2.0: 1 water -> 10 steam)', () => {
     const pump = machineRate(data, { entity: 'offshore-pump' });
     const boiler = machineRate(data, { entity: 'boiler' });
     const engine = machineRate(data, { entity: 'steam-engine' });
-    expect(flow(pump.outputs, 'water') / flow(boiler.inputs, 'water')).toBeCloseTo(20);
+    expect(flow(pump.outputs, 'water') / flow(boiler.inputs, 'water')).toBeCloseTo(200);
     expect(flow(boiler.outputs, 'steam') / flow(engine.inputs, 'steam')).toBeCloseTo(2);
     expect(-engine.powerW).toBe(900e3);
   });

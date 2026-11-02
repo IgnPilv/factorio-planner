@@ -16,6 +16,12 @@ export const ELECTRICITY = 'electricity';
 
 /** Water heat capacity: 200 J per unit per °C. Water enters boilers at 15 °C. */
 export const FLUID_HEAT_CAPACITY = 200;
+/**
+ * 2.0: one unit of water becomes ten units of steam in a boiler or heat
+ * exchanger (FFF #430; water's heat capacity is 2 kJ/°C, steam's 0.2 kJ/°C).
+ * So one offshore pump (1200/s) feeds 200 boilers and 400 steam engines.
+ */
+export const STEAM_PER_WATER = 10;
 export const WATER_START_TEMPERATURE = 15;
 /** Nauvis solar output averaged over a day, as a fraction of peak. */
 export const SOLAR_AVERAGE = 0.7;
@@ -153,7 +159,7 @@ export function machineRate(
       const rate = emptyRate(warnings);
       const out = boilerSteamPerSecond(entity);
       rate.craftsPerSecond = out;
-      rate.inputs = [{ name: 'water', perSecond: out }];
+      rate.inputs = [{ name: 'water', perSecond: out / STEAM_PER_WATER }];
       rate.outputs = [{ name: 'steam', perSecond: out }];
       rate.fuelW = (entity.energyUsage ?? 0) / (entity.effectivity ?? 1);
       if (entity.energySource === 'electric') {
