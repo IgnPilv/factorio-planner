@@ -45,3 +45,18 @@ describe('city block blueprint', () => {
     expect(dead).toEqual([]);
   });
 });
+
+describe('station export', () => {
+  it('includes a train stop and tiles without dead ends', () => {
+    const s = { ...spec, station: true };
+    const bp = blockBlueprint(buildDesign(s));
+    expect(bp.entities.filter((e) => e.name === 'train-stop')).toHaveLength(1);
+    const pieces = [];
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++)
+      for (const e of bp.entities)
+        if (e.name.includes('rail') && !e.name.includes('signal'))
+          pieces.push(pieceFromEntity({ ...e, position: { x: e.position.x + i * 102, y: e.position.y + j * 102 } }));
+    const dead = checkRails(pieces).deadEnds.filter((e) => e.x > 40 && e.x < 266 && e.y > 40 && e.y < 266);
+    expect(dead).toEqual([]);
+  });
+});
