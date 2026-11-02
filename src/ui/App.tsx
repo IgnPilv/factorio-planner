@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { CityBlocks } from '../cityblock/CityBlocks';
 import { LayoutEditor } from '../editor/LayoutEditor';
 import { DataBrowser } from './DataBrowser';
 
-type View = 'layout' | 'data';
+type View = 'layout' | 'blocks' | 'data';
 
 export function App() {
   const [view, setView] = useState<View>('layout');
@@ -13,6 +14,7 @@ export function App() {
         <span className="muted">Nauvis · base game</span>
         <nav className="view-tabs">
           <button className={view === 'layout' ? 'active' : ''} onClick={() => setView('layout')}>Layout</button>
+          <button className={view === 'blocks' ? 'active' : ''} onClick={() => setView('blocks')}>City blocks</button>
           <button className={view === 'data' ? 'active' : ''} onClick={() => setView('data')}>Items and recipes</button>
         </nav>
       </header>
@@ -20,6 +22,11 @@ export function App() {
       <div className="view" hidden={view !== 'layout'}>
         <LayoutEditor />
       </div>
+      {view === 'blocks' && (
+        <div className="view">
+          <CityBlocks />
+        </div>
+      )}
       {view === 'data' && (
         <div className="view">
           <DataBrowser />

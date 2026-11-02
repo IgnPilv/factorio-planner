@@ -104,7 +104,11 @@ export type EntityKind =
   | 'pipe-to-ground'
   | 'storage-tank'
   | 'pole'
-  | 'chest';
+  | 'chest'
+  | 'roboport'
+  | 'rail-signal'
+  | 'train-stop'
+  | 'rolling-stock';
 
 export type EnergySourceType = 'electric' | 'burner' | 'heat' | 'fluid' | 'void';
 
@@ -181,6 +185,18 @@ export interface Entity {
   distributionEffectivity?: number;
   /** Beacon profile: multiplier per number of beacons affecting a machine (index 0 = 1 beacon). */
   profile?: number[];
+
+  // Roboports (radii are half side lengths, measured from the centre)
+  /** Logistics area half-size: 25 means a 50x50 orange zone. */
+  logisticsRadius?: number;
+  /** Construction area half-size: 55 means a 110x110 green zone. */
+  constructionRadius?: number;
+  /** Two roboports join one network when their squares of this half-size touch or overlap. */
+  logisticsConnectionDistance?: number;
+
+  // Rolling stock: one car takes jointDistance + connectionDistance tiles of track.
+  jointDistance?: number;
+  connectionDistance?: number;
 
   // Labs
   researchingSpeed?: number;
