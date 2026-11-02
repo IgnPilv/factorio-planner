@@ -68,6 +68,22 @@ export function gridBuildings(spec: Pick<BlockSpec, 'pitch' | 'corridor'>, subst
 }
 
 /**
+ * Roboports for one robot network across all blocks: rows and columns run from
+ * just inside one edge of the inner area to just inside the other, at most 50
+ * apart, so their 50x50 logistics squares touch inside the block and across
+ * the corridor to the next block.
+ */
+export function joinedRoboports(spec: Pick<BlockSpec, 'pitch' | 'corridor'>): BlockSpec['buildings'] {
+  const a = spec.corridor / 2 + 2; // roboport centre, 2 tiles in from the corridor
+  const b = spec.pitch - a;
+  const n = Math.max(2, Math.ceil((b - a) / 50) + 1);
+  const at = Array.from({ length: n }, (_, i) => 2 * Math.round((a + ((b - a) * i) / (n - 1)) / 2));
+  const out: BlockSpec['buildings'] = [];
+  for (const x of at) for (const y of at) out.push({ name: 'roboport', x, y });
+  return out;
+}
+
+/**
  * Substations in the corridor, between the two tracks, halfway along the
  * block's top and left edges. They link each block's power to its neighbours
  * (the tracks keep the blocks' own poles more than a wire's reach apart).
