@@ -100,6 +100,9 @@ export function MachineSettings({
           </select>
         </label>
       )}
+      {def.kind === 'inserter' && <InserterFilters entity={entity} onChange={onChange} />}
+      {def.kind === 'splitter' && <SplitterSettings entity={entity} onChange={onChange} />}
+      {REQUESTER_CHESTS.has(def.name) && <ChestRequests entity={entity} onChange={onChange} />}
       {def.kind === 'chest' && <ChestSupply value={entity.recipe} onChange={(recipe) => onChange({ recipe })} />}
       {slots > 0 && (
         <div className="modules">
@@ -138,5 +141,128 @@ function ChestSupply({ value, onChange }: { value?: string; onChange: (v: string
         ))}
       </select>
     </label>
+  );
+}
+
+/** Chests that hold logistic requests. */
+export const REQUESTER_CHESTS = new Set(['requester-chest', 'buffer-chest']);
+/** Filter slots on an inserter (filter_count in the game's prototypes). */
+export const INSERTER_FILTER_SLOTS = 5;
+
+/** A compact item dropdown with its own text filter. */
+function ItemPicker({ value, onChange, label, emptyLabel = '(none)' }: { value?: string; onChange: (v: string | undefined) => void; label: string; emptyLabel?: string }) {
+  const [filter, setFilter] = useState('');
+  const f = filter.trim().toLowerCase();
+  const shown = f ? ITEMS.filter((i) => i.displayName.toLowerCase().includes(f) || i.name === value) : ITEMS;
+  return (
+    <span className="item-picker">
+      <input type="search" className="recipe-filter" placeholder="Filter" aria-label={`Filter items for ${label}`} value={filter} onChange={(e) => setFilter(e.target.value)} />
+      <select value={value ?? ''} aria-label={label} onChange={(e) => onChange(e.target.value || undefined)}>
+        <option value="">{emptyLabel}</option>
+        {shown.map((i) => (
+          <option key={i.name} value={i.name}>{i.displayName}</option>
+        ))}
+      </select>
+    </span>
+  );
+}
+
+type Patch = (patch: Partial<PlacedEntity>) => void;
+
+function InserterFilters({ entity, onChange }: { entity: PlacedEntity; onChange: Patch }) {
+  const filters = entity.filters ?? [];
+  const set = (i: number, name?: string) => {
+    const next = [...filters];
+    if (name) next[i] = name;
+    else next.splice(i, 1);
+    const clean = next.filter(Boolean);
+    onChange({ filters: clean.length ? clean : undefined, filterMode: clean.length ? entity.filterMode : undefined });
+  };
+  const rows = Math.min(INSERTER_FILTER_SLOTS, filters.length + 1);
+  return (
+    <div className="filters">
+      <span>Filters (blueprint only, rates ignore them)</span>
+      {Array.from({ length: rows }, (_, i) => (
+        <ItemPicker key={`${i}:${filters[i] ?? ''}`} label={`Filter ${i + 1}`} value={filters[i]} onChange={(v) => set(i, v)} emptyLabel={i < filters.length ? '(none)' : '(add filter)'} />
+      ))}
+      {filters.length > 0 && (
+        <label className="toggle">
+          <input type="checkbox" checked={entity.filterMode === 'blacklist'} onChange={(e) => onChange({ filterMode: e.target.checked ? 'blacklist' : undefined })} /> Deny list (move everything else)
+        </label>
+      )}
+    </div>
+  );
+}
+
+function SplitterSettings({ entity, onChange }: { entity: PlacedEntity; onChange: Patch }) {
+  const side = (v: string) => (v === 'left' || v === 'right' ? v : undefined);
+  return (
+    <div className="filters">
+      <label>
+        Input priority
+        <select value={entity.inputPriority ?? ''} onChange={(e) => onChange({ inputPriority: side(e.target.value) })}>
+          <option value="">None</option>
+          <option value="left">Left</option>
+          <option value="right">Right</option>
+        </select>
+      </label>
+      <label>
+        Output priority
+        <select
+          value={entity.outputPriority ?? ''}
+          onChange={(e) => {
+            const v = side(e.target.value);
+            onChange(v ? { outputPriority: v } : { outputPriority: undefined, filters: undefined });
+          }}
+        >
+          <option value="">None</option>
+          <option value="left">Left</option>
+          <option value="right">Right</option>
+        </select>
+      </label>
+      {entity.outputPriority && (
+        <label>
+          Filter (sends this item to the {entity.outputPriority} side)
+          <ItemPicker label="Splitter filter" value={entity.filters?.[0]} onChange={(v) => onChange({ filters: v ? [v] : undefined })} />
+        </label>
+      )}
+      <span className="muted small">Left and right as seen facing the way items travel. Kept in blueprints; rates assume an even split.</span>
+    </div>
+  );
+}
+
+function ChestRequests({ entity, onChange }: { entity: PlacedEntity; onChange: Patch }) {
+  const requests = entity.requests ?? [];
+  const update = (next: { name: string; count: number }[]) => onChange({ requests: next.length ? next : undefined });
+  return (
+    <div className="filters">
+      <span>Logistic requests</span>
+      {requests.map((r, i) => (
+        <span className="request-row" key={`${i}:${r.name}`}>
+          <ItemPicker
+            label={`Request ${i + 1}`}
+            value={r.name}
+            onChange={(v) => update(v ? requests.map((x, k) => (k === i ? { ...x, name: v } : x)) : requests.filter((_, k) => k !== i))}
+          />
+          <input
+            type="number"
+            min={1}
+            className="request-count"
+            aria-label={`Amount for request ${i + 1}`}
+            value={r.count}
+            onChange={(e) => {
+              const n = Math.max(1, Math.floor(Number(e.target.value) || 1));
+              update(requests.map((x, k) => (k === i ? { ...x, count: n } : x)));
+            }}
+          />
+        </span>
+      ))}
+      <ItemPicker
+        key={requests.length}
+        label="Add request"
+        emptyLabel="(add request)"
+        onChange={(v) => v && update([...requests, { name: v, count: gameData.items[v]?.stackSize ?? 1 }])}
+      />
+    </div>
   );
 }

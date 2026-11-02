@@ -68,6 +68,7 @@ export function layoutToBlueprint(entities: readonly PlacedEntity[], opts: Expor
     if (e.recipe && RECIPE_PROTOTYPES.has(def.prototype) && def.kind !== 'rocket-silo') be.recipe = e.recipe;
     const items = moduleRequests(def.prototype, e.modules);
     if (items.length) be.items = items;
+    Object.assign(be, logisticsSettings(def.kind, e));
     return be;
   });
 
@@ -79,6 +80,66 @@ export function layoutToBlueprint(entities: readonly PlacedEntity[], opts: Expor
     }),
     skipped: entities.length - known.length,
   };
+}
+
+const SIDES = new Set(['left', 'right']);
+const isItem = (n: unknown): n is string => typeof n === 'string' && !!gameData.items[n];
+const REQUESTERS = new Set(['requester-chest', 'buffer-chest']);
+
+/** Inserter filters, splitter priorities and filter, chest requests, in 2.0 blueprint form. */
+function logisticsSettings(kind: string, e: PlacedEntity): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (kind === 'inserter') {
+    const filters = (e.filters ?? []).filter(isItem).slice(0, 5);
+    if (filters.length) {
+      out.use_filters = true;
+      out.filters = filters.map((name, i) => ({ index: i + 1, name, quality: 'normal', comparator: '=' }));
+      if (e.filterMode === 'blacklist') out.filter_mode = 'blacklist';
+    }
+  } else if (kind === 'splitter') {
+    if (e.inputPriority && SIDES.has(e.inputPriority)) out.input_priority = e.inputPriority;
+    if (e.outputPriority && SIDES.has(e.outputPriority)) {
+      out.output_priority = e.outputPriority;
+      if (isItem(e.filters?.[0])) out.filter = { name: e.filters[0], quality: 'normal', comparator: '=' };
+    }
+  } else if (REQUESTERS.has(e.name)) {
+    const reqs = (e.requests ?? []).filter((r) => isItem(r.name) && r.count > 0);
+    if (reqs.length)
+      out.request_filters = {
+        sections: [{ index: 1, filters: reqs.map((r, i) => ({ index: i + 1, name: r.name, quality: 'normal', comparator: '=', count: r.count })) }],
+      };
+  }
+  return out;
+}
+
+/** Read the same settings back (2.0, plus the 1.1 shapes). */
+function readLogistics(kind: string, name: string, be: BlueprintEntity): Partial<PlacedEntity> {
+  const out: Partial<PlacedEntity> = {};
+  const nameOf = (f: unknown) => (typeof f === 'string' ? f : (f as { name?: unknown } | undefined)?.name);
+  if (kind === 'inserter') {
+    const raw = Array.isArray(be.filters) ? (be.filters as { index?: number; name?: unknown }[]) : [];
+    const filters = [...raw].sort((a, b) => (a.index ?? 0) - (b.index ?? 0)).map((f) => f.name).filter(isItem);
+    // 2.0 needs use_filters; 1.1 filter inserters had filters alone
+    if (filters.length && be.use_filters !== false) {
+      out.filters = filters.slice(0, 5);
+      if (be.filter_mode === 'blacklist') out.filterMode = 'blacklist';
+    }
+  } else if (kind === 'splitter') {
+    if (typeof be.input_priority === 'string' && SIDES.has(be.input_priority)) out.inputPriority = be.input_priority as 'left' | 'right';
+    if (typeof be.output_priority === 'string' && SIDES.has(be.output_priority)) {
+      out.outputPriority = be.output_priority as 'left' | 'right';
+      const f = nameOf(be.filter);
+      if (isItem(f)) out.filters = [f];
+    }
+  } else if (REQUESTERS.has(name)) {
+    type Req = { name?: unknown; count?: unknown };
+    const rf = be.request_filters as { sections?: { filters?: Req[] }[] } | Req[] | undefined;
+    // 2.0: { sections: [{ filters }] }; 1.1: [{ index, name, count }]
+    const list: Req[] = Array.isArray(rf) ? rf : (rf?.sections ?? []).flatMap((sec) => sec.filters ?? []);
+    const reqs = list.filter((r) => isItem(r.name)).map((r) => ({ name: r.name as string, count: Math.max(1, Math.floor(Number(r.count) || 1)) }));
+    if (reqs.length) out.requests = reqs;
+  }
+  return out;
 }
 
 function moduleRequests(prototype: string, modules?: string[]): ItemRequest[] {
@@ -216,6 +277,7 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
     if (be.recipe && gameRecipeOk(be.recipe)) e.recipe = be.recipe;
     const modules = readModules(be, def.moduleSlots ?? 0);
     if (modules) e.modules = modules;
+    Object.assign(e, readLogistics(def.kind, def.name, be));
     placed.push(e);
   }
   if (!placed.length) return { clipboard: null, unknown, label: bp.label };

@@ -133,3 +133,13 @@ table.flows tr.neg td:nth-child(2) { color: #ff8a80; }
 .lib-name { flex: 1; min-width: 0; font: inherit; color: #e6e6e6; background: #141414; border: 1px solid #444; border-radius: 4px; padding: 3px 6px; }
 .lib-size { white-space: nowrap; }
 .bp-label input { font: inherit; color: #e6e6e6; background: #141414; border: 1px solid #444; border-radius: 4px; padding: 3px 6px; }
+
+/* Inserter filters, splitter settings, chest requests */
+.filters { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.item-picker { display: flex; gap: 4px; }
+.item-picker .recipe-filter { width: 70px; flex: none; }
+.item-picker select { flex: 1; min-width: 0; }
+.request-row { display: flex; gap: 4px; align-items: center; }
+.request-row .item-picker { flex: 1; min-width: 0; }
+.request-count { width: 64px; font: inherit; color: #e6e6e6; background: #141414; border: 1px solid #444; border-radius: 4px; padding: 3px 4px; }
+.machine-settings .filters label.toggle { display: flex; flex-direction: row; align-items: center; gap: 6px; }
