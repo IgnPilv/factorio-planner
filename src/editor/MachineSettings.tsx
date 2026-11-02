@@ -80,6 +80,7 @@ export function MachineSettings({ entity, def, onChange }: { entity: PlacedEntit
           </select>
         </label>
       )}
+      {def.kind === 'chest' && <ChestSupply value={entity.recipe} onChange={(recipe) => onChange({ recipe })} />}
       {slots > 0 && (
         <div className="modules">
           <span>Modules</span>
@@ -94,5 +95,28 @@ export function MachineSettings({ entity, def, onChange }: { entity: PlacedEntit
         </div>
       )}
     </div>
+  );
+}
+
+const ITEMS = Object.values(gameData.items)
+  .filter((i) => i.type === 'item')
+  .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+/** A chest can stand in for the rest of the factory: it supplies one item without limit. */
+function ChestSupply({ value, onChange }: { value?: string; onChange: (v: string | undefined) => void }) {
+  const [filter, setFilter] = useState('');
+  const f = filter.trim().toLowerCase();
+  const shown = f ? ITEMS.filter((i) => i.displayName.toLowerCase().includes(f) || i.name === value) : ITEMS;
+  return (
+    <label>
+      Supplies (unlimited, for testing)
+      <input type="search" className="recipe-filter" placeholder={`Filter ${ITEMS.length} items`} value={filter} onChange={(e) => setFilter(e.target.value)} />
+      <select value={value ?? ''} onChange={(e) => onChange(e.target.value || undefined)}>
+        <option value="">(nothing: collects what is put in)</option>
+        {shown.map((i) => (
+          <option key={i.name} value={i.name}>{i.displayName}</option>
+        ))}
+      </select>
+    </label>
   );
 }

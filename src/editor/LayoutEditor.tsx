@@ -27,9 +27,9 @@ import {
   type PlacedEntity,
 } from './model';
 import { MachineSettings } from './MachineSettings';
-import { computeLayoutRates } from '../calc';
+import { computeLayoutRates, simulateLayout, type SteadyStateResult } from '../calc';
 import { gameData } from '../data';
-import { MachineRates, PowerSummary, ProductionSummary, QuickSearch } from './Panels';
+import { FlowState, MachineRates, PowerSummary, ProductionSummary, QuickSearch, SimSummary } from './Panels';
 import { analysePower, poleInfo } from './power';
 import type { SearchHit } from './search';
 import { buildBadges, buildViewOverlay, type ViewMode } from './views';
@@ -186,7 +186,20 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
 
   const rates = useMemo(() => computeLayoutRates(layout, gameData, UNLOCK_ALL), [layout]);
   const power = useMemo(() => analysePower(layout.entities, rates), [layout.entities, rates]);
-  useEffect(() => rendererRef.current?.setBadges(buildBadges(view, layout.entities, rates)), [view, layout.entities, rates]);
+  // The steady-state simulation is heavier (~0.2 s per 1,000 buildings), so run it after edits settle.
+  const [sim, setSim] = useState<SteadyStateResult | null>(null);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        setSim(simulateLayout(layout, gameData, UNLOCK_ALL));
+      } catch (err) {
+        console.error('simulation failed', err);
+        setSim(null);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [layout]);
+  useEffect(() => rendererRef.current?.setBadges(buildBadges(view, layout.entities, rates, sim)), [view, layout.entities, rates, sim]);
   // While a pole is in hand (or one is selected) show supply areas and the wires it would make.
   const polePreview = useMemo(() => {
     if (tool.kind === 'build' && ENTITIES[tool.name]?.kind === 'pole' && cursor) {
@@ -201,8 +214,8 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
   }, [tool, cursor, direction, layout, selected]);
   const showPoleAreas = showCoverage || polePreview !== null;
   useEffect(
-    () => rendererRef.current?.setView(buildViewOverlay(view, layout.entities, power, { polePreview, showPoleAreas, showWires })),
-    [view, layout.entities, power, polePreview, showPoleAreas, showWires],
+    () => rendererRef.current?.setView(buildViewOverlay(view, layout.entities, power, { polePreview, showPoleAreas, showWires, sim })),
+    [view, layout.entities, power, polePreview, showPoleAreas, showWires, sim],
   );
   useEffect(() => setMessage(''), [tool]);
 
@@ -692,6 +705,7 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
               )}
             </dl>
             <MachineSettings entity={sel} def={selDef} onChange={(patch) => apply(updateEntity(layout, sel.id, patch))} />
+            <FlowState state={sim?.entities[sel.id]} transport={sim?.transport[sel.id]} />
             <MachineRates rate={rates[sel.id]} status={power.status[sel.id]} />
             <div className="tool-row">
               {isRotatable(selDef) && <button onClick={() => apply(rotateEntity(layout, sel.id))}>Rotate</button>}
@@ -735,6 +749,7 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
           <>
             <h3>Factory</h3>
             <PowerSummary power={power} />
+            <SimSummary sim={sim} />
             <ProductionSummary rates={rates} />
             {layout.entities.length === 0 && <p className="muted">Pick a building on the left, or press / to search.</p>}
           </>
