@@ -160,7 +160,7 @@ export function analyseSignals(pieces: RailPiece[], signals: Signal[], minBlockL
     if (into.isJunction && s.kind === 'rail')
       issues.push({ severity: 'warning', at: s, signalId: s.id,
         message: 'Rail signal in front of a junction: use a chain signal so trains only enter when they can leave' });
-    if (!into.isJunction && from.isJunction && minBlockLength > 0 && into.length < minBlockLength)
+    if (s.kind === 'rail' && !into.isJunction && from.isJunction && minBlockLength > 0 && into.length < minBlockLength)
       issues.push({ severity: 'warning', at: s, signalId: s.id,
         message: `Block after this junction exit is ${into.length.toFixed(1)} tiles, shorter than the train (${minBlockLength}); a waiting train would block the junction` });
   }

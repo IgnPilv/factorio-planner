@@ -6,7 +6,7 @@
 // buildings. Pasting the same blueprint into every grid cell rebuilds the network.
 
 import { zlibSync, strToU8 } from 'fflate';
-import { railEntity, signalEntity, type BlueprintEntityLike } from '../rails/blueprint';
+import { railEntity, signalEntity, trainStopEntity, type BlueprintEntityLike } from '../rails/blueprint';
 import type { Design } from './block';
 
 /** Blueprint version stamp used by Factorio 2.x blueprints in the game files. */
@@ -42,6 +42,7 @@ export function blockBlueprint(d: Design, label = 'City block'): BlockBlueprint 
   const all: BlueprintEntityLike[] = [
     ...d.pieces.map(railEntity),
     ...d.signals.map(signalEntity),
+    ...d.stops.map((s) => trainStopEntity(s, s.dir)),
     ...d.nodes.map((nd) => ({ name: nd.name, position: { x: nd.x, y: nd.y } })),
   ];
   for (const e of all) if (inCell(e.position.x, e.position.y)) out.push(e);

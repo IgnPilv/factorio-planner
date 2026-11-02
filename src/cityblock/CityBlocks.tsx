@@ -5,7 +5,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { gameData } from '../data';
 import { centreLine, type RailPiece } from '../rails/geometry';
 import { signalPosition } from '../rails/signals';
-import { analyse, buildDesign, DEFAULT_SPEC, gridBuildings, type BlockSpec, type Status } from './block';
+import { trainStopEntity } from '../rails/blueprint';
+import { analyse, avoidRails, buildDesign, DEFAULT_SPEC, gridBuildings, type BlockSpec, type Status } from './block';
 import { blockBlueprint } from './export';
 import { constructionRect, logisticsRect, supplyRect, type Rect } from './network';
 import './cityblock.css';
@@ -203,7 +204,7 @@ export function CityBlocks() {
             const s = { ...spec, ...p.spec };
             setSubN(p.substations);
             setRoboN(p.roboports);
-            setSpec({ ...s, buildings: gridBuildings(s, p.substations, p.roboports) });
+            setSpec({ ...s, buildings: avoidRails(s, gridBuildings(s, p.substations, p.roboports)) });
             e.target.value = '';
           }}
         >
@@ -219,6 +220,16 @@ export function CityBlocks() {
         <label className="cb-check">
           <input type="checkbox" checked={spec.junctions} onChange={(e) => set('junctions', e.target.checked)} />
           4-way junctions with all turns
+        </label>
+        <label className="cb-check">
+          <input
+            type="checkbox" checked={spec.station}
+            onChange={(e) => {
+              const next = { ...spec, station: e.target.checked };
+              setSpec({ ...next, buildings: avoidRails(next, next.buildings) });
+            }}
+          />
+          Drive-through station in each block
         </label>
         <p className="cb-note">
           Blueprint: snap to grid {spec.pitch}x{spec.pitch}, absolute position, grid offset {spec.offset},{spec.offset}.
@@ -255,7 +266,7 @@ export function CityBlocks() {
         <div className="cb-fill">
           <label>Substations <input type="number" min={0} max={12} value={subN} onChange={(e) => setSubN(Number(e.target.value))} />²</label>
           <label>Roboports <input type="number" min={0} max={6} value={roboN} onChange={(e) => setRoboN(Number(e.target.value))} />²</label>
-          <button onClick={() => set('buildings', gridBuildings(spec, subN, roboN))}>Fill the inner area evenly</button>
+          <button onClick={() => set('buildings', avoidRails(spec, gridBuildings(spec, subN, roboN)))}>Fill the inner area evenly</button>
           <button onClick={() => set('buildings', [])}>Clear</button>
         </div>
         <p className="cb-note">Click the map to place in every block at once; drag to pan, scroll to zoom.</p>
@@ -312,6 +323,10 @@ export function CityBlocks() {
             return <circle key={s.id} className={s.kind === 'chain' ? 'cb-signal-chain' : 'cb-signal'} cx={p.x} cy={p.y} r={0.6} />;
           })}
           {layers.wires && result.wires.map(([a, b], i) => <line key={`w${i}`} className="cb-wire" x1={a.x} y1={a.y} x2={b.x} y2={b.y} />)}
+          {design.stops.map((st) => {
+            const e = trainStopEntity(st, st.dir);
+            return <rect key={`ts${st.block}`} className="cb-stop" x={e.position.x - 1} y={e.position.y - 1} width={2} height={2} />;
+          })}
           {blueprint.ok && (
             <rect className="cb-cell" x={blueprint.origin.x} y={blueprint.origin.y} width={spec.pitch} height={spec.pitch} />
           )}
