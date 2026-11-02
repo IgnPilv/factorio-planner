@@ -310,9 +310,9 @@ interface MachineInfo {
   weight: number;
 }
 
-/** Electric draw of a machine at activity u: drain always, the rest in proportion. */
-function machinePowerW(m: MachineInfo, u: number): number {
-  return m.drainW + (m.rate.powerW - m.drainW) * u;
+/** Electric draw of a machine at activity u: drain always (times the network's satisfaction), the rest in proportion. */
+function machinePowerW(m: MachineInfo, u: number, share = 1): number {
+  return m.drainW * share + (m.rate.powerW - m.drainW) * u;
 }
 
 export function simulateLayout(
@@ -340,7 +340,12 @@ export function simulateLayout(
     for (const [x, y] of tilesOf(q)) occ.set(key(x, y), q);
   }
   const at = (x: number, y: number) => occ.get(key(x, y));
-  const beacons = beaconsByEntity(data, layout);
+  // A beacon no pole reaches gives no effect (only checked when the layout has poles).
+  const poles = placed.filter((q) => q.e.kind === 'pole');
+  const unpoweredBeacons = new Set(
+    poles.length ? placed.filter((q) => q.e.kind === 'beacon' && !poles.some((p) => inSupplyArea(p, q))).map((q) => q.p.id) : [],
+  );
+  const beacons = beaconsByEntity(data, { ...layout, entities: layout.entities.filter((p) => !unpoweredBeacons.has(p.id)) });
 
   const edges: Edge[] = [];
   const supplies = new Map<NodeId, string>(); // chest node -> supplied item
@@ -743,6 +748,8 @@ export function simulateLayout(
       const q = byId.get(id);
       if (q?.e.energySource === 'electric') addDrain(powerNets.netOf(q), q.e.drain ?? 0);
     }
+    // Beacons draw their full power all the time.
+    for (const q of placed) if (q.e.kind === 'beacon') addDrain(powerNets.netOf(q), q.e.energyUsage ?? 0);
   }
   for (const [net, w] of drainOf) {
     const v: Record<string, number> = { obj: 1e-6 };
@@ -834,10 +841,13 @@ export function simulateLayout(
   // Short of power: the game gives every machine on the network the same
   // share (satisfaction), so they all slow down alike, rather than the LP
   // feeding some fully and starving others.
+  /** Satisfaction of each short network; absent means fully powered. */
+  const netShare = new Map<string, number>();
   if (solution.status === 'optimal' && powerNets.modelled) {
-    const shares = evenPowerShares(solution.variables, machines, powerNets.nets, insertersOn, inserterDemand, constraints, variables);
+    const shares = evenPowerShares(solution.variables, machines, powerNets.nets, insertersOn, drainOf, inserterDemand, constraints, variables);
     if (shares.size) {
-      applyPowerShares(shares, machines, insertersOn, constraints);
+      applyPowerShares(shares, machines, insertersOn, drainOf, constraints);
+      for (const [net, s] of shares) netShare.set(net, Math.min(1, s));
       for (const [net, s] of shares) for (const link of insertersOn.get(net) ?? []) {
         const t = transport[link.q.p.id]!;
         t.capacity = link.capacity * s;
@@ -912,10 +922,12 @@ export function simulateLayout(
     power.supplyW += supply;
     if (powerNets.modelled && demand > 0 && supply - demand < 1e-6 * Math.max(1, demand)) tightNets.add(net);
   }
+  if (!powerNets.modelled)
+    for (const q of placed) if (q.e.kind === 'beacon' && !unpoweredBeacons.has(q.p.id)) power.demandW += q.e.energyUsage ?? 0;
   for (const [id, m] of machines) {
     const u = Math.min(1, Math.max(0, val(`u:${id}`)));
     const scaled = scaleRate(m.rate, u);
-    if (m.electric) scaled.powerW = powerNets.modelled && !m.powerNet ? 0 : machinePowerW(m, u);
+    if (m.electric) scaled.powerW = powerNets.modelled && !m.powerNet ? 0 : machinePowerW(m, u, netShare.get(m.powerNet ?? '') ?? 1);
     if (m.electric && m.powerNet === undefined && !powerNets.modelled) power.demandW += machinePowerW(m, u);
     else if (m.electric && m.powerNet) power.demandW += (m.rate.powerW - m.drainW) * u;
     let status: EntityStatus = 'working';
@@ -965,7 +977,7 @@ export function simulateLayout(
       t.perSecond = total(t.items);
       t.utilization = t.capacity > 0 ? t.perSecond / t.capacity : 0;
       const on = inserterNet.get(id);
-      if (on) t.powerW = t.perSecond * on.link.jPerItem + on.link.drainW;
+      if (on) t.powerW = t.perSecond * on.link.jPerItem + on.link.drainW * (netShare.get(on.net) ?? 1);
       continue;
     }
     const base = t.kind === 'splitter' ? `s:${id}` : `b:${id}`;
@@ -1116,10 +1128,14 @@ function applyPowerShares(
   shares: Map<string, number>,
   machines: Map<string, MachineInfo>,
   insertersOn: Map<string, PoweredLink[]>,
+  drainOf: Map<string, number>,
   constraints: Record<string, Constraint>,
 ) {
   for (const [net, s] of shares) {
     const share = Math.min(1, s);
+    // Satisfaction applies to the whole request, drain and beacons included.
+    const drain = drainOf.get(net);
+    if (drain) constraints[`cap:drain:${net}`] = { max: drain * share };
     for (const m of machines.values())
       if (m.electric && m.powerNet === net && m.rate.powerW > 0) constraints[`u:${m.q.p.id}`] = { max: share };
     for (const link of insertersOn.get(net) ?? []) if (constraints[link.capRow]) constraints[link.capRow] = { max: link.capacity * share };
@@ -1138,6 +1154,7 @@ function evenPowerShares(
   machines: Map<string, MachineInfo>,
   nets: string[],
   insertersOn: Map<string, PoweredLink[]>,
+  drainOf: Map<string, number>,
   inserterDemand: (vals: Map<string, number>, net: string) => number,
   constraints: Record<string, Constraint>,
   variables: Record<string, Coefficients>,
@@ -1158,7 +1175,7 @@ function evenPowerShares(
   for (const [row, c] of Object.entries(constraints)) if (!row.startsWith('pow:')) free[row] = c;
   const solveCapped = (caps: Map<string, number>) => {
     const cons = { ...free };
-    applyPowerShares(caps, machines, insertersOn, cons);
+    applyPowerShares(caps, machines, insertersOn, drainOf, cons);
     const r = solve({ direction: 'maximize', objective: 'obj', constraints: cons, variables });
     return r.status === 'optimal' ? new Map(r.variables) : undefined;
   };
@@ -1353,6 +1370,14 @@ function buildFluidNetworks(
 // network if any of its tiles is inside a pole's supply area. A layout with no
 // generators is assumed to be fed from outside.
 
+/** Whether a pole's supply area touches this entity. */
+function inSupplyArea(pole: Placed, q: Placed): boolean {
+  const cx = pole.x + pole.w / 2;
+  const cy = pole.y + pole.h / 2;
+  const r = pole.e.supplyAreaDistance ?? 0;
+  return q.x < cx + r && cx - r < q.x + q.w && q.y < cy + r && cy - r < q.y + q.h;
+}
+
 function buildPowerNetworks(placed: Placed[], machines: Map<string, MachineInfo>) {
   const generators = [...machines.values()].filter((m) => m.rate.powerW < 0);
   const nets: string[] = [];
@@ -1382,11 +1407,7 @@ function buildPowerNetworks(placed: Placed[], machines: Map<string, MachineInfo>
       if (Math.hypot(ax - bx, ay - by) <= reach + 1e-9) parent.set(find(a.p.id), find(b.p.id));
     }
   netOf = (q: Placed) => {
-    for (const p of poles) {
-      const [cx, cy] = centre(p);
-      const r = p.e.supplyAreaDistance ?? 0;
-      if (q.x < cx + r && cx - r < q.x + q.w && q.y < cy + r && cy - r < q.y + q.h) return find(p.p.id);
-    }
+    for (const p of poles) if (inSupplyArea(p, q)) return find(p.p.id);
     return undefined;
   };
   for (const m of machines.values()) m.powerNet = netOf(m.q);
