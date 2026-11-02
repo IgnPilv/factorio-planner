@@ -306,6 +306,28 @@ describe('simulateLayout', () => {
     expect(r.entities.asm!.activity).toBeCloseTo(42e3 / 155e3, 3);
   });
 
+  it('short power is shared evenly: every machine slows by the same fraction', () => {
+    // One solar panel (42 kW average) for two assembler 1s on gears.
+    const ents: PlacedEntity[] = [e('solar-panel', 0, 0, N)];
+    for (const [i, y] of [0, 4].entries()) {
+      ents.push(
+        e('wooden-chest', 4, y + 1, N, { recipe: 'iron-plate' }),
+        e('fast-inserter', 5, y + 1, E),
+        e('assembling-machine-1', 6, y, N, { recipe: 'iron-gear-wheel', id: `asm${i}` }),
+        e('fast-inserter', 9, y + 1, E),
+        e('wooden-chest', 10, y + 1, N),
+      );
+    }
+    const r = simulateLayout({ entities: ents }, data);
+    const a = r.entities.asm0!;
+    const b = r.entities.asm1!;
+    expect(a.status).toBe('low-power');
+    expect(b.status).toBe('low-power');
+    expect(a.activity).toBeCloseTo(b.activity, 4);
+    expect(r.power.demandW).toBeCloseTo(42e3, -1);
+    expect(a.activity).toBeCloseTo(42e3 / (2 * a.rate.powerW / a.activity), 3);
+  });
+
   it('machines outside every pole are unpowered', () => {
     const ents = [
       e('solar-panel', 0, 0, N),
