@@ -272,7 +272,7 @@ export class GridRenderer {
         t.position.set(px + w / 2, py + h / 2);
         labels.push(t);
       }
-      const recipeName = e.recipe && (gameData.recipes[e.recipe]?.displayName ?? gameData.resources[e.recipe]?.displayName);
+      const recipeName = e.recipe && (gameData.recipes[e.recipe]?.displayName ?? gameData.resources[e.recipe]?.displayName ?? gameData.items[e.recipe]?.displayName);
       if (recipeName && r.w >= 2) {
         const t = new Text({
           text: recipeName,

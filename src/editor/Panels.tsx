@@ -1,12 +1,12 @@
 // Side panels: layout summary (power and production) and the quick search box.
 
 import { useEffect, useRef, useState } from 'react';
-import { layoutTotals, type EntityRate } from '../calc';
+import { layoutTotals, type EntityRate, type EntityState, type SteadyStateResult, type TransportState } from '../calc';
 import { gameData, wikiIconUrl } from '../data';
 import { ENTITIES } from './catalog';
 import { formatWatts, type PowerReport, type PowerStatus } from './power';
 import { quickSearch, type SearchHit } from './search';
-import { displayNameOf, fmtRate } from './views';
+import { displayNameOf, fmtRate, STATUS_COLORS, STATUS_LABELS } from './views';
 
 const YELLOW_BELT = 15; // items per second
 
@@ -66,7 +66,7 @@ export function ProductionSummary({ rates }: { rates: Record<string, EntityRate>
   if (!net.length) return null;
   return (
     <section className="summary-section">
-      <h4>Net production</h4>
+      <h4>Full-speed balance</h4>
       <table className="flows">
         <thead>
           <tr>
@@ -207,5 +207,101 @@ export function QuickSearch({ onPick }: { onPick: (hit: SearchHit) => void }) {
         </ul>
       )}
     </div>
+  );
+}
+
+const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
+
+/** Simulated state of one building: status and actual activity, or belt/inserter load. */
+export function FlowState({ state, transport }: { state?: EntityState; transport?: TransportState }) {
+  if (transport) {
+    return (
+      <section className="summary-section">
+        <h4>Throughput</h4>
+        <p>
+          {fmtRate(transport.perSecond)}/s of {fmtRate(transport.capacity)}/s ({Math.round(transport.utilization * 100)}%)
+        </p>
+        {transport.items.length > 0 && (
+          <ul className="flow-list">
+            {transport.items.map((f) => (
+              <li key={f.name}>
+                {displayNameOf(f.name)} <b>{fmtRate(f.perSecond * 60)}/min</b>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    );
+  }
+  if (!state) return null;
+  const outputs = state.rate.outputs.filter((o) => o.name !== 'electricity');
+  return (
+    <section className="summary-section">
+      <h4>As built</h4>
+      <p>
+        <span className="status-dot" style={{ background: hex(STATUS_COLORS[state.status]) }} /> {STATUS_LABELS[state.status]}
+        {state.status !== 'no-recipe' && ` · ${Math.round(state.activity * 100)}% speed`}
+      </p>
+      {state.missing?.length ? <p className="warn">Nothing delivers: {state.missing.map(displayNameOf).join(', ')}</p> : null}
+      {outputs.length > 0 && state.activity < 0.999 && (
+        <p className="muted small">
+          Actually making {outputs.map((o) => `${fmtRate(o.perSecond * 60)}/min ${displayNameOf(o.name)}`).join(', ')}
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** Whole-layout result of the steady-state simulation. */
+export function SimSummary({ sim }: { sim: SteadyStateResult | null }) {
+  if (!sim) return null;
+  const counts = new Map<string, number>();
+  for (const s of Object.values(sim.entities)) if (s.status !== 'working' && s.status !== 'no-recipe') counts.set(s.status, (counts.get(s.status) ?? 0) + 1);
+  const full = Object.values(sim.transport).filter((t) => t.utilization >= 0.99).length;
+  if (!sim.outputs.length && !sim.inputs.length && !counts.size && !full && !sim.warnings.length) return null;
+  return (
+    <section className="summary-section">
+      <h4>As built</h4>
+      {sim.outputs.length > 0 && (
+        <>
+          <span className="muted small">Leaves the layout (open belt ends, chests, labs)</span>
+          <table className="flows">
+            <tbody>
+              {sim.outputs.map((f) => (
+                <tr key={f.name}>
+                  <td>{displayNameOf(f.name)}</td>
+                  <td>{fmtRate(f.perSecond * 60)}/min</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+      {sim.inputs.length > 0 && (
+        <>
+          <span className="muted small">Taken from supply chests</span>
+          <table className="flows">
+            <tbody>
+              {sim.inputs.map((f) => (
+                <tr key={f.name}>
+                  <td>{displayNameOf(f.name)}</td>
+                  <td>{fmtRate(f.perSecond * 60)}/min</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+      {[...counts].map(([status, n]) => (
+        <p key={status}>
+          <span className="status-dot" style={{ background: hex(STATUS_COLORS[status as keyof typeof STATUS_COLORS]) }} /> {n} {STATUS_LABELS[status as keyof typeof STATUS_LABELS].split(':')[0].toLowerCase()}
+        </p>
+      ))}
+      {full > 0 && <p className="warn">{full} belt or inserter{full > 1 ? 's' : ''} running full</p>}
+      {sim.warnings.slice(0, 5).map((w) => (
+        <p key={w} className="muted small">{w}</p>
+      ))}
+      <p className="muted small">The Logistics view (V) colours machines by status and belts by load.</p>
+    </section>
   );
 }

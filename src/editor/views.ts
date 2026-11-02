@@ -1,7 +1,7 @@
 // What the canvas shows in each view: rate badges, and the extra drawing for
 // the electric and logistics views.
 
-import type { EntityRate } from '../calc';
+import type { EntityRate, EntityStatus, SteadyStateResult } from '../calc';
 import type { EntityKind } from '../data/types';
 import { gameData } from '../data';
 import { ENTITIES } from './catalog';
@@ -34,11 +34,17 @@ export function fmtRate(perMinute: number): string {
 export const displayNameOf = (name: string) =>
   name === 'electricity' ? 'Electricity' : (gameData.items[name]?.displayName ?? gameData.resources[name]?.displayName ?? name);
 
-export function buildBadges(mode: ViewMode, entities: readonly PlacedEntity[], rates: Record<string, EntityRate>): Record<string, string> {
+export function buildBadges(
+  mode: ViewMode,
+  entities: readonly PlacedEntity[],
+  rates: Record<string, EntityRate>,
+  sim?: SteadyStateResult | null,
+): Record<string, string> {
   const out: Record<string, string> = {};
   for (const e of entities) {
     const def = ENTITIES[e.name];
-    const r = rates[e.id];
+    const state = mode === 'logistics' ? sim?.entities[e.id] : undefined;
+    const r = state?.rate ?? rates[e.id];
     if (!def || !r) continue;
     if (mode === 'electric') {
       if (isGenerator(def) && r.powerW < 0) out[e.id] = `+${formatWatts(-r.powerW)}`;
@@ -54,7 +60,8 @@ export function buildBadges(mode: ViewMode, entities: readonly PlacedEntity[], r
     if (mode === 'logistics') {
       const inSum = r.inputs.reduce((s, f) => s + f.perSecond, 0) * 60;
       const outSum = outputs.reduce((s, f) => s + f.perSecond, 0) * 60;
-      out[e.id] = inSum > 0 ? `in ${fmtRate(inSum)} · out ${fmtRate(outSum)}/min` : `out ${fmtRate(outSum)}/min`;
+      const pct = state ? ` · ${Math.round(state.activity * 100)}%` : '';
+      out[e.id] = (inSum > 0 ? `in ${fmtRate(inSum)} · out ${fmtRate(outSum)}/min` : `out ${fmtRate(outSum)}/min`) + pct;
     } else {
       out[e.id] = `${fmtRate(outputs[0].perSecond * 60)}/min`;
     }
@@ -69,6 +76,36 @@ export interface OverlayOptions {
   showPoleAreas?: boolean;
   /** Draw wires between poles (user toggle). */
   showWires?: boolean;
+  /** Steady-state simulation, for the logistics view. */
+  sim?: SteadyStateResult | null;
+}
+
+export const STATUS_COLORS: Record<EntityStatus, number> = {
+  working: 0x4cd964,
+  starved: 0xffcc00,
+  'output-blocked': 0xff9a3c,
+  'low-power': 0xffcc00,
+  'no-power': 0xff4d4d,
+  'no-recipe': 0x888888,
+  idle: 0x6f8fa8,
+};
+
+export const STATUS_LABELS: Record<EntityStatus, string> = {
+  working: 'Working',
+  starved: 'Starved: an input arrives too slowly',
+  'output-blocked': 'Output blocked: products are not taken away fast enough',
+  'low-power': 'Low power',
+  'no-power': 'No power',
+  'no-recipe': 'No recipe set',
+  idle: 'Idle: nothing uses its output',
+};
+
+/** Green below 70% load, yellow up to 99%, red when full. */
+export function loadColor(utilization: number): number {
+  if (utilization >= 0.99) return 0xff4d4d;
+  if (utilization >= 0.7) return 0xffcc00;
+  if (utilization > 0) return 0x4cd964;
+  return 0x555555;
 }
 
 const WIRE_COLOR = 0xff9a3c;
@@ -131,13 +168,22 @@ export function buildViewOverlay(mode: ViewMode, entities: readonly PlacedEntity
     }
     return { areas, lines, tints, dim, dots: wires ? poleDots(power) : [], markers };
   }
-  // logistics: keep belts, inserters, pipes and storage; fade power gear and
-  // draw each inserter's hand path from pickup to drop.
+  // logistics: fade power gear, colour machines by simulated status and
+  // belts/inserters by how full they run, and draw inserter hand paths.
   const lines: NonNullable<ViewOverlay['lines']> = [];
+  const tints: NonNullable<ViewOverlay['tints']> = [];
+  const sim = opts.sim;
   for (const e of entities) {
     const def = ENTITIES[e.name];
     const k = def?.kind;
-    if (k === 'pole' || k === 'solar-panel' || k === 'accumulator' || k === 'generator' || k === 'steam-turbine' || k === 'beacon') dim.add(e.id);
+    if (k === 'pole' || k === 'solar-panel' || k === 'accumulator' || k === 'generator' || k === 'steam-turbine' || k === 'beacon') {
+      dim.add(e.id);
+      continue;
+    }
+    const t = sim?.transport[e.id];
+    const st = sim?.entities[e.id];
+    if (t) tints.push({ id: e.id, color: loadColor(t.utilization), alpha: 0.55 });
+    else if (st && st.status !== 'no-recipe') tints.push({ id: e.id, color: STATUS_COLORS[st.status], alpha: 0.35 });
     if (k === 'inserter') {
       const reach = e.name.includes('long-handed') ? 2 : 1;
       const [dx, dy] = DIRS[e.direction];
@@ -146,5 +192,5 @@ export function buildViewOverlay(mode: ViewMode, entities: readonly PlacedEntity
       lines.push({ x1: cx - dx * reach, y1: cy - dy * reach, x2: cx + dx * reach, y2: cy + dy * reach, color: 0x7dff9a, width: 2 });
     }
   }
-  return { dim, lines, markers };
+  return { dim, lines, tints, markers };
 }
