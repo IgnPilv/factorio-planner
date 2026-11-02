@@ -15,6 +15,10 @@ export interface ResearchBonuses {
   labSpeed: number;
   /** Lab productivity bonus. */
   labProductivity: number;
+  /** Extra items per swing for ordinary inserters. */
+  inserterStackBonus: number;
+  /** Extra items per swing for bulk inserters. */
+  bulkInserterBonus: number;
   /** Per-recipe productivity bonus from recipe productivity research. */
   recipeProductivity: Record<string, number>;
   /** Recipes usable with this research state. */
@@ -31,6 +35,8 @@ export function researchBonuses(data: GameData, research: ResearchState): Resear
     miningProductivity: 0,
     labSpeed: 0,
     labProductivity: 0,
+    inserterStackBonus: 0,
+    bulkInserterBonus: 0,
     recipeProductivity: {},
     unlockedRecipes: new Set(),
   };
@@ -54,6 +60,12 @@ export function researchBonuses(data: GameData, research: ResearchState): Resear
           break;
         case 'laboratory-productivity':
           bonuses.labProductivity += effect.modifier * level;
+          break;
+        case 'inserter-stack-size-bonus':
+          bonuses.inserterStackBonus += effect.modifier * level;
+          break;
+        case 'bulk-inserter-capacity-bonus':
+          bonuses.bulkInserterBonus += effect.modifier * level;
           break;
         case 'change-recipe-productivity':
           bonuses.recipeProductivity[effect.recipe] =

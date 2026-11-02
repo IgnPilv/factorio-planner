@@ -34,6 +34,24 @@ export interface Ghost {
   items: { name: string; x: number; y: number; direction: Direction; ok: boolean }[];
   /** extra highlighted tiles (water brush, eraser) */
   brush?: { tiles: [number, number][]; color: number };
+  /** selection rectangle being dragged, in tiles (inclusive) */
+  box?: { x0: number; y0: number; x1: number; y1: number };
+}
+
+/** Extra drawing for the electric and logistics views. Coordinates are in tiles. */
+export interface ViewOverlay {
+  /** Filled areas drawn under the buildings (pole supply areas). */
+  areas?: { x0: number; y0: number; x1: number; y1: number; color: number; alpha: number }[];
+  /** Lines drawn over the buildings (power wires). Width is in screen pixels, so wires stay visible when zoomed out. */
+  lines?: { x1: number; y1: number; x2: number; y2: number; color: number; width: number }[];
+  /** Dots at pole centres (wire anchors), radius in screen pixels. */
+  dots?: { x: number; y: number; color: number; r: number }[];
+  /** Small status markers in a building's top-right corner (e.g. no power). */
+  markers?: { id: string; color: number }[];
+  /** Colour washes over individual buildings (power status, belt tier). */
+  tints?: { id: string; color: number; alpha: number }[];
+  /** Buildings to fade out because they don't matter in this view. */
+  dim?: ReadonlySet<string>;
 }
 
 export class GridRenderer {
@@ -43,6 +61,8 @@ export class GridRenderer {
   private water = new Graphics();
   private grid = new Graphics();
   private entities = new Container();
+  private viewUnder = new Graphics();
+  private viewOver = new Graphics();
   private overlay = new Graphics();
   private ghostLayer = new Container();
   private ready = false;
@@ -53,6 +73,7 @@ export class GridRenderer {
   private selected = new Set<string>();
   private badges: Record<string, string> = {};
   private ghost: Ghost = { items: [] };
+  private view: ViewOverlay = {};
 
   async init(host: HTMLElement) {
     await this.app.init({
@@ -67,7 +88,7 @@ export class GridRenderer {
       return;
     }
     host.appendChild(this.app.canvas);
-    this.world.addChild(this.ground, this.water, this.grid, this.entities, this.overlay, this.ghostLayer);
+    this.world.addChild(this.ground, this.water, this.grid, this.viewUnder, this.entities, this.viewOver, this.overlay, this.ghostLayer);
     this.app.stage.addChild(this.world);
     this.app.renderer.on('resize', () => this.drawView());
     this.ready = true;
@@ -126,6 +147,7 @@ export class GridRenderer {
     if (waterChanged) this.drawWater();
     if (entitiesChanged) this.drawEntities();
     this.drawOverlay();
+    this.drawViewOverlay();
   }
 
   setSelection(ids: Iterable<string>) {
@@ -136,6 +158,11 @@ export class GridRenderer {
   setBadges(badges: Record<string, string>) {
     this.badges = badges;
     if (this.ready) this.drawEntities();
+  }
+
+  setView(view: ViewOverlay) {
+    this.view = view;
+    if (this.ready) this.drawViewOverlay();
   }
 
   setGhost(ghost: Ghost) {
@@ -150,6 +177,7 @@ export class GridRenderer {
     this.drawWater();
     this.drawEntities();
     this.drawOverlay();
+    this.drawViewOverlay();
     this.drawGhost();
   }
 
@@ -185,6 +213,7 @@ export class GridRenderer {
     for (let ty = Math.ceil(y0 / C) * C; ty <= y1; ty += C) grid.moveTo(x0 * TILE, ty * TILE).lineTo(x1 * TILE, ty * TILE);
     grid.stroke({ width: px * 1.5, color: COLORS.gridMajor, alpha: 0.35 });
 
+    if (this.view.lines?.length || this.view.dots?.length) this.drawViewOverlay();
     // Labels are hidden when zoomed far out, where they would be unreadable.
     for (const child of this.entities.children) if (child instanceof Text) child.visible = zoom >= 0.45;
   }
@@ -271,6 +300,50 @@ export class GridRenderer {
     }
   }
 
+  private drawViewOverlay() {
+    const under = this.viewUnder.clear();
+    const over = this.viewOver.clear();
+    const { areas, lines, tints, dim, dots, markers } = this.view;
+    const z = this.camera.zoom;
+    for (const a of areas ?? [])
+      under.rect(a.x0 * TILE, a.y0 * TILE, (a.x1 - a.x0) * TILE, (a.y1 - a.y0) * TILE).fill({ color: a.color, alpha: a.alpha });
+    if (dim?.size || tints?.length) {
+      const byId = new Map(this.layout.entities.map((e) => [e.id, e]));
+      if (dim?.size) {
+        for (const id of dim) {
+          const e = byId.get(id);
+          if (!e) continue;
+          const r = entityRect(e);
+          over.rect(r.x * TILE, r.y * TILE, r.w * TILE, r.h * TILE);
+        }
+        over.fill({ color: 0x1b1b1b, alpha: 0.7 });
+      }
+      for (const t of tints ?? []) {
+        const e = byId.get(t.id);
+        if (!e) continue;
+        const r = entityRect(e);
+        over.rect(r.x * TILE + 2, r.y * TILE + 2, r.w * TILE - 4, r.h * TILE - 4).fill({ color: t.color, alpha: t.alpha });
+      }
+    }
+    for (const l of lines ?? [])
+      over.moveTo(l.x1 * TILE, l.y1 * TILE).lineTo(l.x2 * TILE, l.y2 * TILE).stroke({ width: l.width / z, color: l.color, alpha: 0.95 });
+    for (const d of dots ?? []) over.circle(d.x * TILE, d.y * TILE, d.r / z).fill({ color: d.color });
+    if (markers?.length) {
+      const byId = new Map(this.layout.entities.map((e) => [e.id, e]));
+      for (const m of markers) {
+        const e = byId.get(m.id);
+        if (!e) continue;
+        const r = entityRect(e);
+        const rad = Math.min((Math.min(r.w, r.h) * TILE) / 3, 7 / z);
+        const cx = (r.x + r.w) * TILE - rad - 2;
+        const cy = r.y * TILE + rad + 2;
+        over.circle(cx, cy, rad).fill({ color: m.color }).stroke({ width: 1.5, color: 0x000000 });
+        // lightning bolt glyph
+        over.poly([cx + rad * 0.15, cy - rad * 0.7, cx - rad * 0.45, cy + rad * 0.1, cx - rad * 0.02, cy + rad * 0.1, cx - rad * 0.15, cy + rad * 0.7, cx + rad * 0.45, cy - rad * 0.1, cx + rad * 0.02, cy - rad * 0.1]).fill({ color: 0x1b1b1b });
+      }
+    }
+  }
+
   private drawOverlay() {
     const g = this.overlay.clear();
     if (!this.selected.size) return;
@@ -286,7 +359,12 @@ export class GridRenderer {
     for (const c of this.ghostLayer.removeChildren()) c.destroy();
     const g = new Graphics();
     this.ghostLayer.addChild(g);
-    const { brush, items } = this.ghost;
+    const { brush, items, box } = this.ghost;
+    if (box) {
+      const x0 = Math.min(box.x0, box.x1), y0 = Math.min(box.y0, box.y1);
+      const w = Math.abs(box.x1 - box.x0) + 1, h = Math.abs(box.y1 - box.y0) + 1;
+      g.rect(x0 * TILE, y0 * TILE, w * TILE, h * TILE).fill({ color: COLORS.selection, alpha: 0.12 }).stroke({ width: 2, color: COLORS.selection, alpha: 0.9 });
+    }
     if (brush) {
       for (const [x, y] of brush.tiles) g.rect(x * TILE, y * TILE, TILE, TILE);
       g.fill({ color: brush.color, alpha: 0.35 }).stroke({ width: 1, color: brush.color, alpha: 0.8 });

@@ -1,5 +1,6 @@
 // Inspector controls for one placed machine: recipe (or mined resource) and modules.
 
+import { useState } from 'react';
 import { gameData } from '../data';
 import type { Entity, Module, Recipe } from '../data/types';
 import type { PlacedEntity } from './model';
@@ -42,6 +43,9 @@ export function MachineSettings({ entity, def, onChange }: { entity: PlacedEntit
   const slots = def.moduleSlots ?? 0;
   const modules = modulesFor(def, entity.recipe);
   const current = entity.modules ?? [];
+  const [filter, setFilter] = useState('');
+  const f = filter.trim().toLowerCase();
+  const shown = f ? recipes.filter((r) => r.displayName.toLowerCase().includes(f) || r.name === entity.recipe) : recipes;
 
   const setModule = (i: number, name: string) => {
     const next = Array.from({ length: slots }, (_, k) => current[k] ?? '');
@@ -54,9 +58,12 @@ export function MachineSettings({ entity, def, onChange }: { entity: PlacedEntit
       {recipes.length > 0 && (
         <label>
           Recipe
+          {recipes.length > 10 && (
+            <input type="search" className="recipe-filter" placeholder={`Filter ${recipes.length} recipes`} value={filter} onChange={(e) => setFilter(e.target.value)} />
+          )}
           <select value={entity.recipe ?? ''} onChange={(e) => onChange({ recipe: e.target.value || undefined })}>
             <option value="">(none)</option>
-            {recipes.map((r) => (
+            {shown.map((r) => (
               <option key={r.name} value={r.name}>{r.displayName}</option>
             ))}
           </select>

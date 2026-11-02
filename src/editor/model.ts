@@ -223,3 +223,110 @@ export function parseLayout(json: string): Layout {
     .map((e: PlacedEntity) => ({ ...e, id: typeof e.id === 'string' ? e.id : newId(), direction: ((e.direction ?? 0) & 3) as Direction }));
   return { version: 1, entities, water: raw.water.filter((k: unknown) => typeof k === 'string') };
 }
+
+// ---- selections, clipboard and rotation of groups ---------------------------
+
+/** A copied group of buildings, positioned relative to its bounding box. */
+export interface Clipboard {
+  entities: Omit<PlacedEntity, 'id'>[];
+  w: number;
+  h: number;
+}
+
+export function boundsOf(entities: readonly PlacedEntity[] | readonly Omit<PlacedEntity, 'id'>[]) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const e of entities) {
+    const r = entityRect(e as PlacedEntity);
+    x0 = Math.min(x0, r.x);
+    y0 = Math.min(y0, r.y);
+    x1 = Math.max(x1, r.x + r.w);
+    y1 = Math.max(y1, r.y + r.h);
+  }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+export function copyToClipboard(entities: readonly PlacedEntity[]): Clipboard | null {
+  if (!entities.length) return null;
+  const b = boundsOf(entities);
+  return {
+    w: b.w,
+    h: b.h,
+    entities: entities.map(({ id: _id, ...e }) => ({ ...e, x: e.x - b.x, y: e.y - b.y, modules: e.modules ? [...e.modules] : undefined })),
+  };
+}
+
+/** Rotate a clipboard 90° clockwise. Buildings that can't turn keep their direction but still move. */
+export function rotateClipboard(clip: Clipboard): Clipboard {
+  return {
+    w: clip.h,
+    h: clip.w,
+    entities: clip.entities.map((e) => {
+      const r = entityRect(e as PlacedEntity);
+      const def = ENTITIES[e.name];
+      const turns = def && (isRotatable(def) || def.width !== def.height);
+      const direction = (turns ? (e.direction + 1) % 4 : e.direction) as Direction;
+      return { ...e, direction, x: clip.h - (r.y + r.h), y: r.x };
+    }),
+  };
+}
+
+/** Where each clipboard entity lands when the clipboard is centred on tile cx,cy. */
+export function clipboardAt(clip: Clipboard, cx: number, cy: number) {
+  const ox = cx - Math.floor((clip.w - 1) / 2);
+  const oy = cy - Math.floor((clip.h - 1) / 2);
+  return clip.entities.map((e) => ({ ...e, x: e.x + ox, y: e.y + oy }));
+}
+
+/** Paste: place every building that fits; returns how many were blocked. */
+export function pasteClipboard(layout: Layout, clip: Clipboard, cx: number, cy: number): { layout: Layout; placed: string[]; blocked: number } {
+  const occ = buildOccupancy(layout.entities);
+  const water = new Set(layout.water);
+  const added: PlacedEntity[] = [];
+  let blocked = 0;
+  for (const e of clipboardAt(clip, cx, cy)) {
+    if (!canPlace(occ, water, e.name, e.x, e.y, e.direction).ok) {
+      blocked++;
+      continue;
+    }
+    const placed = { ...e, id: newId() };
+    added.push(placed);
+    for (const [x, y] of tilesOf(entityRect(placed))) occ.set(tileKey(x, y), placed.id);
+  }
+  if (!added.length) return { layout, placed: [], blocked };
+  return { layout: { ...layout, entities: [...layout.entities, ...added] }, placed: added.map((e) => e.id), blocked };
+}
+
+/** Rotate a group of placed buildings 90° clockwise around their centre. Unchanged if anything would collide. */
+export function rotateGroup(layout: Layout, ids: readonly string[]): Layout {
+  const set = new Set(ids);
+  const group = layout.entities.filter((e) => set.has(e.id));
+  if (!group.length) return layout;
+  if (group.length === 1) return rotateEntity(layout, group[0].id);
+  const b = boundsOf(group);
+  const rotated = rotateClipboard(copyToClipboard(group)!);
+  // keep the centre where it was
+  const ox = b.x + Math.floor((b.w - rotated.w) / 2);
+  const oy = b.y + Math.floor((b.h - rotated.h) / 2);
+  const others = layout.entities.filter((e) => !set.has(e.id));
+  const occ = buildOccupancy(others);
+  const water = new Set(layout.water);
+  const moved = group.map((e, i) => ({ ...e, ...rotated.entities[i], id: e.id, x: rotated.entities[i].x + ox, y: rotated.entities[i].y + oy }));
+  for (const e of moved) {
+    if (!canPlace(occ, water, e.name, e.x, e.y, e.direction).ok) return layout;
+    for (const [x, y] of tilesOf(entityRect(e))) occ.set(tileKey(x, y), e.id);
+  }
+  const byId = new Map(moved.map((e) => [e.id, e]));
+  return { ...layout, entities: layout.entities.map((e) => byId.get(e.id) ?? e) };
+}
+
+/** Ids of buildings that overlap a tile rectangle (inclusive corners). */
+export function entitiesInBox(entities: readonly PlacedEntity[], ax: number, ay: number, bx: number, by: number): string[] {
+  const x0 = Math.min(ax, bx), x1 = Math.max(ax, bx) + 1;
+  const y0 = Math.min(ay, by), y1 = Math.max(ay, by) + 1;
+  return entities
+    .filter((e) => {
+      const r = entityRect(e);
+      return r.x < x1 && x0 < r.x + r.w && r.y < y1 && y0 < r.y + r.h;
+    })
+    .map((e) => e.id);
+}
