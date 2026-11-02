@@ -105,7 +105,7 @@ function summarise(value: string): ImportSummary | string {
   const names = Object.keys(unknown);
   const notes: string[] = [];
   if (names.some((n) => /locomotive|wagon/.test(n))) notes.push('Trains are not placed: the planner lays out track, not rolling stock.');
-  if (names.some((n) => /beside 1\.x curve/.test(n))) notes.push('Signals and stops that stood beside 1.x curves were left out, since the curves were rebuilt in a different shape. Re-add junction signals where you need them.');
+  if (names.some((n) => /beside 1\.x curve/.test(n))) notes.push('Signals and stops that stood beside 1.x curves were left out, since the curves were rebuilt in a different shape; the rebuilt junctions get new signals instead.');
   if (names.some((n) => /rail-ramp|rail-support|elevated/.test(n))) notes.push('Elevated rails are not supported.');
   if (names.some((n) => !/\(|locomotive|wagon|rail/.test(n))) notes.push('Other skipped buildings are from mods, or not in the planner yet.');
   if (!clipboard) return skipped.length ? `Nothing the planner knows in this blueprint (${skipped.join(', ')}). ${notes.join(' ')}` : 'This blueprint has no buildings.';
@@ -121,6 +121,7 @@ function summarise(value: string): ImportSummary | string {
     converted.unshift(
       `${plural(railRoutes.legacyPieces, '1.x curve or diagonal piece')} rebuilt as ${plural(railRoutes.rebuilt, 'route')} of 2.0 track. 2.0 curves are wider, so junctions and loops take a little more room.`,
     );
+  if (railRoutes?.signals) converted.splice(1, 0, `${plural(railRoutes.signals, 'signal')} added at the rebuilt junctions: chain signals where trains enter, rail signals where they leave.`);
   const note = `${label ? `"${label}": ` : ''}${plural(clipboard.entities.length, 'building')}${clipboard.rails?.length ? `, ${clipboard.rails.length} rails` : ''}`;
   return { clip: clipboard, note, coming, converted, skipped, notes };
 }

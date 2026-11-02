@@ -11,7 +11,7 @@ import {
   type BlueprintEntityInput,
 } from '../src/blueprint/format';
 import { blueprintToClipboard, layoutToBlueprint, vanillaName } from '../src/blueprint/layout';
-import { railPiece } from '../src/editor/rails';
+import { railPiece, signalAt, type PlacedRail } from '../src/editor/rails';
 import { checkRails } from '../src/rails/geometry';
 import { clipboardAt, emptyLayout, pasteClipboard, type PlacedEntity } from '../src/editor/model';
 
@@ -400,6 +400,9 @@ describe('blueprints with rails', () => {
       entities.push({ name: 'straight-rail', position: { x: 2, y: 6 + 2 * i } });
       entities.push({ name: 'straight-rail', position: { x: -4, y: -10 - 2 * i } });
     }
+    // Signals for both directions on the lower straight: right-hand traffic both ways.
+    entities.push({ name: 'rail-signal', position: { x: 3.5, y: 20.5 }, direction: 4 });
+    entities.push({ name: 'rail-signal', position: { x: 0.5, y: 21.5 }, direction: 0 });
     const { clipboard, unknown, railRoutes } = blueprintToClipboard({ item: 'blueprint', version: encodeVersion(1, 1, 110), entities: entities.map((e, i) => ({ ...e, entity_number: i + 1 })) });
     expect(unknown).toEqual({});
     expect(railRoutes).toMatchObject({ rebuilt: 1, failed: 0, legacyPieces: 2 });
@@ -409,6 +412,12 @@ describe('blueprints with rails', () => {
     expect(report.issues).toEqual([]);
     // Only the two far ends of the line are open: the new curves join the old straights.
     expect(report.deadEnds).toHaveLength(2);
+    // The rebuilt section is signalled both ways: a chain signal in, a rail signal out, each beside a track joint.
+    const sigs = clipboard!.entities.filter((e) => e.name.startsWith('rail'));
+    expect(sigs).toHaveLength(6);
+    expect(sigs.map((e) => e.name).sort()).toEqual(['rail-chain-signal', 'rail-chain-signal', 'rail-signal', 'rail-signal', 'rail-signal', 'rail-signal']);
+    for (const s of sigs) expect(signalAt(rails as PlacedRail[], s.x, s.y, s.direction)).toEqual({ direction: s.direction, diagonal: false });
+    expect(railRoutes!.signals).toBe(4);
   });
 
   it('places modded buildings as their base-game counterparts', () => {

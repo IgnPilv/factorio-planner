@@ -31,6 +31,8 @@ export interface LegacyRailInput {
 export interface LegacyConversion {
   /** New 2.0 pieces, as blueprint name, centre and 16-way direction. */
   added: { name: RailPiece['type']; x: number; y: number; direction: number }[];
+  /** Where each rebuilt route starts and ends on straight track, with the travel heading at both ends. */
+  ends: { from: RailEnd; to: RailEnd }[];
   /** Indexes (into the straights passed in) of 1.x straight pieces to drop. */
   removedStraights: Set<number>;
   /** Routes through 1.x curves that were rebuilt, and those that could not be. */
@@ -175,6 +177,7 @@ export function convertLegacyRails(straights: readonly LegacyRailInput[], legacy
   const branchedFrom = new Set<string>();
   const failedEnds = new Set<string>();
   let rebuilt = 0;
+  const ends: LegacyConversion['ends'] = [];
   const covered = new Set<number>();
   for (const r of routes.values()) {
     const starts = along(r.start, true), goals = along(r.goal, false);
@@ -187,6 +190,8 @@ export function convertLegacyRails(straights: readonly LegacyRailInput[], legacy
       continue;
     }
     rebuilt++;
+    const first = path[0]!.a, last = path[path.length - 1]!.b;
+    ends.push({ from: { x: first.x, y: first.y, dir: opposite(first.dir) }, to: { ...last } });
     for (const v of r.via) covered.add(v);
     for (const p of path) {
       const e = railEntity(p);
@@ -220,7 +225,7 @@ export function convertLegacyRails(straights: readonly LegacyRailInput[], legacy
   const legacyPieces = covered.size;
   // Curve pieces on no rebuilt route: dead ends at the blueprint's edge, or routes that didn't fit.
   const lostPieces = pieces.length - firstLegacy - covered.size;
-  return { added: [...added.values()], removedStraights: removed, routes: rebuilt, failed, legacyPieces, lostPieces };
+  return { added: [...added.values()], ends, removedStraights: removed, routes: rebuilt, failed, legacyPieces, lostPieces };
 }
 
 const COST: Record<RailPiece['type'], number> = { 'straight-rail': 2, 'half-diagonal-rail': 4.47, 'curved-rail-a': 5.05, 'curved-rail-b': 4.95 };
