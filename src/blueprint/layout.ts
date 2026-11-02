@@ -295,7 +295,14 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
     unknown[name] = (unknown[name] ?? 0) + 1;
     lostTrack = true;
   };
-  for (const be of bp.entities ?? []) {
+  // 1.x rails sit on a 2x2 grid centred on even coordinates, 2.0 rails on odd
+  // ones. Shift the whole blueprint one tile so 1.x straight track lands on the
+  // 2.0 grid; everything else keeps its place relative to the track.
+  const legacyShift = legacy && (bp.entities ?? []).some((e) => e.name === 'straight-rail' && e.position.x % 2 === 0 && e.position.y % 2 === 0) ? 1 : 0;
+  const entities = legacyShift
+    ? (bp.entities ?? []).map((e) => ({ ...e, position: { x: e.position.x + legacyShift, y: e.position.y + legacyShift } }))
+    : (bp.entities ?? []);
+  for (const be of entities) {
     const r = readRail(be, legacy);
     if (r === undefined) continue;
     if (r) rails.push(r);
@@ -303,12 +310,14 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
   }
   // When some track can't be read, its signals, stops and trains are left out
   // too, rather than floating beside missing track.
-  for (const orig of bp.entities ?? []) {
+  for (const orig of entities) {
     if (RAIL_PIECE.test(orig.name)) continue;
     const be = legacy && LEGACY_NAMES[orig.name] ? { ...orig, name: LEGACY_NAMES[orig.name]! } : orig;
     const def = ENTITIES[be.name];
     // Trains are not placed: they stand on track and are not part of a layout.
-    if (!def || def.kind === 'rolling-stock' || (lostTrack && RAIL_PARTS.has(def.kind))) {
+    // A signal stays when it still stands beside track that came through.
+    const orphan = lostTrack && RAIL_PARTS.has(def?.kind ?? '') && !(def?.kind === 'rail-signal' && signalOnTrack(rails, be));
+    if (!def || def.kind === 'rolling-stock' || orphan) {
       unknown[be.name] = (unknown[be.name] ?? 0) + 1;
       continue;
     }
@@ -363,6 +372,13 @@ function readRail(be: BlueprintEntity, legacy: boolean): Omit<PlacedRail, 'id'> 
     if (be.name === 'straight-rail' && raw % 2 === 0) r = { name: 'straight-rail', x: be.position.x, y: be.position.y, direction: raw % 4 === 0 ? 0 : 4 };
   } else if (isRailName(be.name)) r = { name: be.name, x: be.position.x, y: be.position.y, direction: raw };
   return r && railValid(r) ? r : null;
+}
+
+/** Whether a blueprint signal stands at a joint of the imported straight track. */
+function signalOnTrack(rails: readonly Omit<PlacedRail, 'id'>[], be: BlueprintEntity): boolean {
+  if (!rails.length) return false;
+  const tx = Math.floor(be.position.x), ty = Math.floor(be.position.y);
+  return signalAt(rails as PlacedRail[], tx, ty, 0) !== null;
 }
 
 const gameRecipeOk = (r: string) => !!gameData.recipes[r];

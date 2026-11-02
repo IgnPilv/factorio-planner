@@ -357,4 +357,25 @@ describe('blueprints with rails', () => {
     // East of a north-south track, a signal guards northbound trains, so it faces south.
     expect(clipboard!.entities[0]!.direction).toBe(2);
   });
+
+  // Regression: 1.x centres straight rails on even tiles (2.0 uses odd ones),
+  // so a real 1.x rail grid imported as nothing but roboports.
+  it('reads 1.x straight rails centred on even tiles', () => {
+    const { clipboard, unknown } = blueprintToClipboard({
+      item: 'blueprint',
+      version: encodeVersion(0, 17, 79),
+      entities: [
+        { entity_number: 1, name: 'straight-rail', position: { x: 0, y: 0 } },
+        { entity_number: 2, name: 'straight-rail', position: { x: 0, y: 2 } },
+        { entity_number: 3, name: 'straight-rail', position: { x: 4, y: 6 }, direction: 2 },
+        { entity_number: 4, name: 'rail-chain-signal', position: { x: 1.5, y: 0.5 } },
+        { entity_number: 5, name: 'curved-rail', position: { x: 20, y: 20 } },
+        { entity_number: 6, name: 'roboport', position: { x: 10, y: 10 } },
+      ],
+    });
+    expect(clipboard!.rails).toHaveLength(3);
+    expect(clipboard!.rails!.map((r) => r.direction)).toEqual([0, 0, 4]);
+    expect(clipboard!.entities.map((e) => e.name).sort()).toEqual(['rail-chain-signal', 'roboport']);
+    expect(unknown).toEqual({ 'curved-rail (1.x diagonal or curve)': 1 });
+  });
 });
