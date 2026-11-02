@@ -27,6 +27,7 @@ import {
   type PlacedEntity,
 } from './model';
 import { MachineSettings } from './MachineSettings';
+import { BlueprintDialog, type BlueprintDialogMode } from './BlueprintDialog';
 import { computeLayoutRates, simulateLayout, type SteadyStateResult } from '../calc';
 import { gameData } from '../data';
 import { FlowState, MachineRates, PowerSummary, ProductionSummary, QuickSearch, SimSummary } from './Panels';
@@ -116,6 +117,7 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
   const [view, setView] = useState<ViewMode>('normal');
   const [showWires, setShowWires] = useState(() => readPref('wires', true));
   const [showCoverage, setShowCoverage] = useState(() => readPref('coverage', false));
+  const [bpDialog, setBpDialog] = useState<BlueprintDialogMode | null>(null);
   useEffect(() => writePref('wires', showWires), [showWires]);
   useEffect(() => writePref('coverage', showCoverage), [showCoverage]);
   const [showRobots, setShowRobots] = useState(() => readPref('robots', true));
@@ -269,6 +271,17 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
   }, [cursor, tool, direction, brush, occupancy, waterSet, layout, clip, box]);
 
   // ---- editing actions -----------------------------------------------------
+
+  /** Blueprint the selection, or the whole layout when nothing is selected. */
+  const openBlueprintExport = useCallback(() => {
+    const { layout: cur, selection: sel } = st.current;
+    const chosen = sel.length ? cur.entities.filter((e) => sel.includes(e.id)) : cur.entities;
+    if (!chosen.length) {
+      setMessage('Nothing to blueprint yet: place some buildings first.');
+      return;
+    }
+    setBpDialog({ kind: 'export', entities: chosen, scope: sel.length ? 'selection' : 'layout' });
+  }, []);
 
   const tryPlace = useCallback(
     (name: string, x: number, y: number, dir: Direction, commit: boolean): string | null => {
@@ -514,6 +527,9 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
         if (!st.current.clip) return;
         ev.preventDefault();
         setTool({ kind: 'paste' });
+      } else if ((ev.ctrlKey || ev.metaKey) && k === 'b') {
+        ev.preventDefault();
+        openBlueprintExport();
       } else if ((ev.ctrlKey || ev.metaKey) && k === 'a') {
         ev.preventDefault();
         setSelection(st.current.layout.entities.map((e) => e.id));
@@ -577,9 +593,30 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('keyup', onKey);
     };
-  }, [apply, redo, undo, removeAt, rotateHoveredOrSelected, tryPlace]);
+  }, [apply, redo, undo, removeAt, rotateHoveredOrSelected, tryPlace, openBlueprintExport]);
+
+  // Pasting a blueprint string anywhere outside a text field opens the import dialog.
+  useEffect(() => {
+    const onPaste = (ev: ClipboardEvent) => {
+      if ((ev.target as HTMLElement)?.closest?.('input, textarea, select')) return;
+      const text = ev.clipboardData?.getData('text')?.trim();
+      if (text && /^0eN[A-Za-z0-9+/=\s]+$/.test(text)) {
+        ev.preventDefault();
+        setBpDialog({ kind: 'import', initial: text });
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, []);
 
   // ---- file actions --------------------------------------------------------
+
+  const importBlueprint = (cb: Clipboard, note: string) => {
+    setClip(cb);
+    setTool({ kind: 'paste' });
+    setBpDialog(null);
+    setMessage(`Blueprint in hand: ${note}. Click to place, R to rotate.`);
+  };
 
   const fileInput = useRef<HTMLInputElement>(null);
   const exportJson = () => {
@@ -665,6 +702,13 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
           <span className="sep" />
           <button onClick={exportJson}>Export</button>
           <button onClick={() => fileInput.current?.click()}>Import</button>
+          <span className="sep" />
+          <button onClick={openBlueprintExport} title="Copy the selection (or the whole layout) as a Factorio blueprint string (Ctrl+B)">
+            {selection.length ? 'Blueprint selection' : 'Blueprint all'}
+          </button>
+          <button onClick={() => setBpDialog({ kind: 'import' })} title="Paste a blueprint string from Factorio (or just Ctrl+V it)">
+            Import blueprint
+          </button>
           <input ref={fileInput} type="file" accept="application/json,.json" hidden onChange={(e) => e.target.files?.[0] && importJson(e.target.files[0])} />
           <button
             onClick={() => {
@@ -764,6 +808,7 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
               >
                 Copy
               </button>
+              <button onClick={openBlueprintExport} title="Copy as a Factorio blueprint string (Ctrl+B)">Blueprint</button>
               <button
                 onClick={() => {
                   apply(removeEntities(layout, selection));
@@ -785,6 +830,7 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
           </>
         )}
       </aside>
+      {bpDialog && <BlueprintDialog mode={bpDialog} onClose={() => setBpDialog(null)} onImport={importBlueprint} />}
     </div>
   );
 }
