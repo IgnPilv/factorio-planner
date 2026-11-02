@@ -318,10 +318,13 @@ describe('simulateLayout', () => {
     // The assembler and its two fast inserters split the 42 kW.
     expect(r.power.demandW).toBeCloseTo(42e3, -1);
     expect(r.entities.asm!.rate.powerW + inserterPower(r)).toBeCloseTo(42e3, -1);
-    // Drains first (assembler 5 kW, two fast inserters 0.5 kW each), then per
-    // unit of activity 150 kW for the assembler and 7 kJ per item moved
-    // (3 plates in, 1.5 gears out per second at full speed).
-    expect(r.entities.asm!.activity).toBeCloseTo((42e3 - 6e3) / (150e3 + 7e3 * 4.5), 3);
+    // Satisfaction s scales everything, drains included: 6 kW of drain × s, plus
+    // 150 kW per unit of activity and 7 kJ per item moved. The fast inserter
+    // feeding plates is slowed to s too, so the assembler runs a bit below s.
+    const s = Object.values(r.transport).find((t) => t.powerShare !== undefined)!.powerShare!;
+    const u = r.entities.asm!.activity;
+    expect(u).toBeLessThanOrEqual(s + 1e-9);
+    expect(6e3 * s + 150e3 * u + 7e3 * 4.5 * u).toBeCloseTo(42e3, -1);
   });
 
   it('short power is shared evenly: every machine slows by the same fraction', () => {
@@ -371,6 +374,52 @@ describe('simulateLayout', () => {
     expect(r.entities.starved!.activity).toBe(0);
     expect(r.entities.starved!.rate.powerW).toBeCloseTo(5e3, 3);
     expect(r.power.demandW).toBeCloseTo(10e3, 3);
+  });
+
+  it('beacons draw 480 kW all the time, and one no pole reaches gives no effect', () => {
+    // Assembler 2 on gears with a speed-module beacon below it. The poles above
+    // don't reach the beacon; a third one at (7, 6) does.
+    const build = (poleX: number) => {
+      const ents = [
+        e('wooden-chest', 4, 1, N, { recipe: 'iron-plate' }),
+        e('bulk-inserter', 5, 1, E),
+        e('assembling-machine-2', 6, 0, N, { recipe: 'iron-gear-wheel', id: 'asm' }),
+        e('bulk-inserter', 9, 1, E),
+        e('wooden-chest', 10, 1, N),
+        e('beacon', 6, 3, N, { id: 'beacon', modules: ['speed-module', 'speed-module'] }),
+        e('small-electric-pole', 5, 0),
+        e('small-electric-pole', 9, 0),
+      ];
+      if (poleX >= 0) ents.push(e('small-electric-pole', poleX, 6));
+      return simulateLayout({ entities: ents }, data);
+    };
+    const powered = build(7);
+    const dark = build(-1);
+    // Speed module: +20% each, beacon effectivity 1.5 → +60% with one beacon.
+    expect(powered.entities.asm!.rate.speedBonus).toBeCloseTo(dark.entities.asm!.rate.speedBonus + 0.6, 3);
+    expect(dark.entities.asm!.rate.speedBonus).toBeCloseTo(0, 6);
+    // No generators, so power comes from outside: demand is the assembler plus the beacon.
+    expect(powered.power.demandW).toBeCloseTo(powered.entities.asm!.rate.powerW + 480e3, 0);
+    expect(dark.power.demandW).toBeCloseTo(dark.entities.asm!.rate.powerW, 0);
+  });
+
+  it('a beacon on a short network takes its share and the machines keep theirs', () => {
+    // One solar panel (42 kW) against a 480 kW beacon and an assembler 2:
+    // everything runs at the same low satisfaction, the assembler too.
+    const ents = [
+      e('solar-panel', 0, 0, N),
+      e('wooden-chest', 4, 1, N, { recipe: 'iron-plate' }),
+      e('bulk-inserter', 5, 1, E),
+      e('assembling-machine-2', 6, 0, N, { recipe: 'iron-gear-wheel', id: 'asm' }),
+      e('bulk-inserter', 9, 1, E),
+      e('wooden-chest', 10, 1, N),
+      e('beacon', 6, 3, N, { modules: ['speed-module', 'speed-module'] }),
+    ];
+    const r = simulateLayout({ entities: ents }, data);
+    expect(r.power.demandW).toBeCloseTo(42e3, -1);
+    const u = r.entities.asm!.activity;
+    expect(u).toBeGreaterThan(0.02);
+    expect(u).toBeLessThan(0.1);
   });
 
   it('electric inserters no pole reaches move nothing; burner inserters still do', () => {

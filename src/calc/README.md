@@ -94,7 +94,9 @@ splitter and chest, and nothing moves faster than its limit.
   it is small for the usual pickup and drop distances.
   Every powered electric machine draws its drain whether it runs or not
   (idle, starved or without a recipe); the rest of its power scales with
-  activity.
+  activity. Beacons draw their full power all the time, and a beacon no pole
+  reaches (when the layout has poles) gives no effect. On a short network the
+  satisfaction s scales everything alike, drains and beacons included.
   Power-plant parts only run as hard as demand needs.
 - **Chests** absorb whatever reaches them; a chest whose `recipe` names an
   item is an unlimited supply of it. Labs absorb science packs.
