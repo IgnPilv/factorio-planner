@@ -8951,6 +8951,19 @@
    "wikiUrl": "https://wiki.factorio.com/Active_provider_chest",
    "inventorySize": 48
   },
+  "artillery-wagon": {
+   "name": "artillery-wagon",
+   "displayName": "Artillery wagon",
+   "prototype": "artillery-wagon",
+   "kind": "rolling-stock",
+   "width": 1,
+   "height": 5,
+   "item": "artillery-wagon",
+   "icon": "__base__/graphics/icons/artillery-wagon.png",
+   "wikiUrl": "https://wiki.factorio.com/Artillery_wagon",
+   "jointDistance": 4,
+   "connectionDistance": 3
+  },
   "assembling-machine-1": {
    "name": "assembling-machine-1",
    "displayName": "Assembling machine 1",
@@ -9234,6 +9247,19 @@
    ],
    "miningArea": 2
   },
+  "cargo-wagon": {
+   "name": "cargo-wagon",
+   "displayName": "Cargo wagon",
+   "prototype": "cargo-wagon",
+   "kind": "rolling-stock",
+   "width": 1,
+   "height": 5,
+   "item": "cargo-wagon",
+   "icon": "__base__/graphics/icons/cargo-wagon.png",
+   "wikiUrl": "https://wiki.factorio.com/Cargo_wagon",
+   "jointDistance": 4,
+   "connectionDistance": 3
+  },
   "centrifuge": {
    "name": "centrifuge",
    "displayName": "Centrifuge",
@@ -9425,6 +9451,19 @@
    "beltThroughput": 30,
    "maxDistance": 7
   },
+  "fluid-wagon": {
+   "name": "fluid-wagon",
+   "displayName": "Fluid wagon",
+   "prototype": "fluid-wagon",
+   "kind": "rolling-stock",
+   "width": 1,
+   "height": 5,
+   "item": "fluid-wagon",
+   "icon": "__base__/graphics/icons/fluid-wagon.png",
+   "wikiUrl": "https://wiki.factorio.com/Fluid_wagon",
+   "jointDistance": 4,
+   "connectionDistance": 3
+  },
   "heat-exchanger": {
    "name": "heat-exchanger",
    "displayName": "Heat exchanger",
@@ -9494,6 +9533,20 @@
     "utility-science-pack",
     "space-science-pack"
    ]
+  },
+  "locomotive": {
+   "name": "locomotive",
+   "displayName": "Locomotive",
+   "prototype": "locomotive",
+   "kind": "rolling-stock",
+   "width": 1,
+   "height": 5,
+   "item": "locomotive",
+   "icon": "__base__/graphics/icons/locomotive.png",
+   "wikiUrl": "https://wiki.factorio.com/Locomotive",
+   "energySource": "burner",
+   "jointDistance": 4,
+   "connectionDistance": 3
   },
   "long-handed-inserter": {
    "name": "long-handed-inserter",
@@ -9651,6 +9704,28 @@
    ],
    "miningArea": 1
   },
+  "rail-chain-signal": {
+   "name": "rail-chain-signal",
+   "displayName": "Rail chain signal",
+   "prototype": "rail-chain-signal",
+   "kind": "rail-signal",
+   "width": 1,
+   "height": 1,
+   "item": "rail-chain-signal",
+   "icon": "__base__/graphics/icons/rail-chain-signal.png",
+   "wikiUrl": "https://wiki.factorio.com/Rail_chain_signal"
+  },
+  "rail-signal": {
+   "name": "rail-signal",
+   "displayName": "Rail signal",
+   "prototype": "rail-signal",
+   "kind": "rail-signal",
+   "width": 1,
+   "height": 1,
+   "item": "rail-signal",
+   "icon": "__base__/graphics/icons/rail-signal.png",
+   "wikiUrl": "https://wiki.factorio.com/Rail_signal"
+  },
   "requester-chest": {
    "name": "requester-chest",
    "displayName": "Requester chest",
@@ -9662,6 +9737,22 @@
    "icon": "__base__/graphics/icons/requester-chest.png",
    "wikiUrl": "https://wiki.factorio.com/Requester_chest",
    "inventorySize": 48
+  },
+  "roboport": {
+   "name": "roboport",
+   "displayName": "Roboport",
+   "prototype": "roboport",
+   "kind": "roboport",
+   "width": 4,
+   "height": 4,
+   "item": "roboport",
+   "icon": "__base__/graphics/icons/roboport.png",
+   "wikiUrl": "https://wiki.factorio.com/Roboport",
+   "energySource": "electric",
+   "energyUsage": 50000,
+   "logisticsRadius": 25,
+   "constructionRadius": 55,
+   "logisticsConnectionDistance": 25
   },
   "rocket-silo": {
    "name": "rocket-silo",
@@ -9837,6 +9928,17 @@
    "wikiUrl": "https://wiki.factorio.com/Substation",
    "supplyAreaDistance": 9,
    "wireReach": 18
+  },
+  "train-stop": {
+   "name": "train-stop",
+   "displayName": "Train stop",
+   "prototype": "train-stop",
+   "kind": "train-stop",
+   "width": 2,
+   "height": 2,
+   "item": "train-stop",
+   "icon": "__base__/graphics/icons/train-stop.png",
+   "wikiUrl": "https://wiki.factorio.com/Train_stop"
   },
   "transport-belt": {
    "name": "transport-belt",

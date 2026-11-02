@@ -15,7 +15,7 @@ const protoDir = path.join(root, 'base', 'prototypes');
 
 const FILES = [
   'item.lua', 'fluid.lua', 'recipe.lua', 'technology.lua',
-  'entity/entities.lua', 'entity/mining-drill.lua', 'entity/transport-belts.lua', 'entity/resources.lua',
+  'entity/entities.lua', 'entity/mining-drill.lua', 'entity/transport-belts.lua', 'entity/resources.lua', 'entity/trains.lua',
 ];
 
 const raw = {};
@@ -136,6 +136,8 @@ const KIND_BY_TYPE = {
   splitter: 'splitter', inserter: 'inserter', pipe: 'pipe', 'pipe-to-ground': 'pipe-to-ground',
   'storage-tank': 'storage-tank', 'electric-pole': 'pole', container: 'chest', 'logistic-container': 'chest',
   lab: 'lab', 'rocket-silo': 'rocket-silo', 'assembling-machine': 'assembler',
+  roboport: 'roboport', 'rail-signal': 'rail-signal', 'rail-chain-signal': 'rail-signal', 'train-stop': 'train-stop',
+  locomotive: 'rolling-stock', 'cargo-wagon': 'rolling-stock', 'fluid-wagon': 'rolling-stock', 'artillery-wagon': 'rolling-stock',
 };
 function kindOf(p) {
   if (p.type === 'assembling-machine') {
@@ -234,6 +236,17 @@ for (const [type, group] of Object.entries(raw)) {
         break;
       case 'container': case 'logistic-container':
         e.inventorySize = p.inventory_size;
+        break;
+      case 'roboport':
+        e.logisticsRadius = p.logistics_radius;
+        e.constructionRadius = p.construction_radius;
+        // The game connects roboports whose connection squares touch; it defaults to the logistics radius.
+        e.logisticsConnectionDistance = p.logistics_connection_distance ?? p.logistics_radius;
+        break;
+      case 'locomotive': case 'cargo-wagon': case 'fluid-wagon': case 'artillery-wagon':
+        // Distance between the two bogies, and the gap to the next car; a car takes joint + connection tiles of track.
+        e.jointDistance = p.joint_distance;
+        e.connectionDistance = p.connection_distance;
         break;
       case 'lab':
         e.researchingSpeed = p.researching_speed ?? 1;
