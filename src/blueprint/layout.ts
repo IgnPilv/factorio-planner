@@ -16,7 +16,8 @@ import { gameData } from '../data';
 import { ENTITIES } from '../editor/catalog';
 import { footprint, groupBounds, type BlockGrid, type Clipboard, type Direction, type PlacedEntity } from '../editor/model';
 import { evenFloor, isRailName, RAIL_ITEM, railValid, signalAt, trainStopAt, type PlacedRail } from '../editor/rails';
-import { convertLegacyRails, legacyEnds } from './legacyRails';
+import { convertLegacyRails, legacyEnds, type LegacyConversion } from './legacyRails';
+import type { RailEnd } from '../rails/geometry';
 import { poleInfo } from '../editor/power';
 import {
   encodeVersion,
@@ -324,7 +325,7 @@ export interface ImportResult {
   /** Modded buildings placed as a base-game one: "from -> to" with counts. */
   replaced: Record<string, number>;
   /** 1.x curve sections rebuilt with 2.0 track. */
-  railRoutes?: { rebuilt: number; failed: number; legacyPieces: number };
+  railRoutes?: { rebuilt: number; failed: number; legacyPieces: number; signals?: number };
   label?: string;
 }
 
@@ -360,6 +361,7 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
     else lostRail(legacy ? `${be.name} (1.x)` : be.name);
   }
   let railRoutes: ImportResult['railRoutes'];
+  let junctionSignals: LegacyConversion['ends'] = [];
   if (legacyTrack.length) {
     // 1.x curves and diagonals: plan the same routes again with 2.0 track.
     const conv = convertLegacyRails(legacyStraights, legacyTrack);
@@ -370,6 +372,7 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
       rails.push(...keep);
     }
     for (const a of conv.added) if (railValid(a)) rails.push(a);
+    junctionSignals = conv.ends;
     for (let i = 0; i < conv.lostPieces; i++) lostRail('1.x curve or diagonal (could not rebuild)');
   }
   // When some track can't be read, its signals, stops and trains are left out
@@ -413,6 +416,7 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
     Object.assign(e, readLogistics(def.kind, def.name, be));
     placed.push(e);
   }
+  if (junctionSignals.length && railRoutes) railRoutes.signals = addJunctionSignals(placed, junctionSignals);
   if (!placed.length && !rails.length) return { clipboard: null, unknown, replaced, railRoutes, label: bp.label };
   // Signals guard the track on their right: take their facing from the track beside them.
   if (rails.length)
@@ -452,6 +456,61 @@ function signalOnTrack(rails: readonly Omit<PlacedRail, 'id'>[], be: BlueprintEn
   if (!rails.length) return false;
   const tx = Math.floor(be.position.x), ty = Math.floor(be.position.y);
   return signalAt(rails as PlacedRail[], tx, ty, 0) !== null;
+}
+
+const TRAVEL_STEP: Record<number, [number, number] | undefined> = { 0: [0, -1], 4: [1, 0], 8: [0, 1], 12: [-1, 0] };
+
+/**
+ * Signal the junctions rebuilt from 1.x curves: a chain signal where each route
+ * enters, a rail signal where it leaves, on the right of the track like the
+ * editor's own signals. A route is signalled for a direction of travel only when
+ * the blueprint's own signals show trains running that way nearby, so one-way
+ * track stays one-way and unsignalled track stays unsignalled. Skipped where a
+ * building or another signal is already close. Returns how many were added.
+ */
+function addJunctionSignals(placed: Omit<PlacedEntity, 'id'>[], routes: LegacyConversion['ends']): number {
+  const taken = new Set<string>();
+  const existing: { x: number; y: number; direction: number }[] = [];
+  for (const e of placed) {
+    const def = ENTITIES[e.name];
+    if (!def) continue;
+    const { w, h } = footprint(def, e.direction);
+    for (let dx = 0; dx < w; dx++) for (let dy = 0; dy < h; dy++) taken.add(`${e.x + dx},${e.y + dy}`);
+    if (def.kind === 'rail-signal' && !e.diagonal) existing.push(e);
+  }
+  const facingOf = (travel: number) => ((travel + 8) % 16) / 4;
+  const signalTile = (j: RailEnd) => {
+    const [fx, fy] = TRAVEL_STEP[j.dir]!;
+    const [rx, ry] = [-fy, fx];
+    return { x: j.x + rx * 1.5 + fx * 0.5 - 0.5, y: j.y + ry * 1.5 + fy * 0.5 - 0.5 };
+  };
+  // Does the blueprint signal traffic heading `travel` near this point?
+  // Only signals beside the same line of track count, not ones on a parallel track.
+  const trafficNear = (j: RailEnd) => {
+    const t = signalTile(j);
+    const alongY = j.dir % 8 === 0;
+    return existing.some((s) => s.direction === facingOf(j.dir) && (alongY ? s.x === t.x && Math.abs(s.y - t.y) <= 40 : s.y === t.y && Math.abs(s.x - t.x) <= 40));
+  };
+  const wanted: { at: RailEnd; chain: boolean }[] = [];
+  const rev = (e: RailEnd): RailEnd => ({ x: e.x, y: e.y, dir: (e.dir + 8) % 16 });
+  for (const r of routes) {
+    if (!TRAVEL_STEP[r.from.dir] || !TRAVEL_STEP[r.to.dir]) continue;
+    if (trafficNear(r.from) || trafficNear(r.to)) wanted.push({ at: r.from, chain: true }, { at: r.to, chain: false });
+    if (trafficNear(rev(r.to)) || trafficNear(rev(r.from))) wanted.push({ at: rev(r.to), chain: true }, { at: rev(r.from), chain: false });
+  }
+  const placedSignals: { x: number; y: number }[] = [...existing];
+  let added = 0;
+  // Chain signals first, so a joint that is both an exit and an entry gets the chain signal.
+  for (const w of wanted.sort((a, b) => Number(b.chain) - Number(a.chain))) {
+    const { x, y } = signalTile(w.at);
+    if (taken.has(`${x},${y}`) || placedSignals.some((s) => Math.abs(s.x - x) <= 1 && Math.abs(s.y - y) <= 1)) continue;
+    const e = { name: w.chain ? 'rail-chain-signal' : 'rail-signal', x, y, direction: facingOf(w.at.dir) as Direction };
+    placed.push(e);
+    placedSignals.push(e);
+    taken.add(`${x},${y}`);
+    added++;
+  }
+  return added;
 }
 
 /** Whether a blueprint train stop stands beside imported straight track. */
