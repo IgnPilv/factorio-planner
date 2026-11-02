@@ -20,6 +20,13 @@ export interface PlacedEntity {
   /** Crafting recipe, or for a mining drill the resource it mines. */
   recipe?: string;
   modules?: string[];
+  /** Inserters: item filters. Splitters: the first entry is the filter item. */
+  filters?: string[];
+  /** Inserters: filters exclude instead of allow. */
+  filterMode?: 'blacklist';
+  /** Splitters: preferred input and output side, seen facing the way items travel. */
+  inputPriority?: 'left' | 'right';
+  outputPriority?: 'left' | 'right';
 }
 
 export interface LayoutLike {
