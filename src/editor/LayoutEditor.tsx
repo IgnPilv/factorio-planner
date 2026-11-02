@@ -36,7 +36,7 @@ import { LibraryDialog } from './LibraryDialog';
 import { loadDesigns, saveDesigns, type Design } from '../blueprint/library';
 import { computeLayoutRates, simulateLayout, type ResearchState, type SteadyStateResult } from '../calc';
 import { gameData } from '../data';
-import { Bottlenecks, FlowState, MachineRates, SelectionFlows, PowerSummary, ProductionSummary, QuickSearch, SimSummary } from './Panels';
+import { Bottlenecks, ResearchSummary, FlowState, MachineRates, SelectionFlows, PowerSummary, ProductionSummary, QuickSearch, SimSummary } from './Panels';
 import { analysePower, poleInfo } from './power';
 import { analyseRobots, isRoboportName, nodeOf, robotOverlay } from './robots';
 import { computeUnlocks, entityUnlocked, recipeUnlocked } from './unlocks';
@@ -72,6 +72,8 @@ function loadSaved(): Layout {
   }
   return starterLayout();
 }
+
+const LAB_RESEARCH_KEY = 'factorio-planner.labResearch';
 
 /** Where a click at tile cx,cy would put a building (offshore pumps snap to the shore, signals and stops to track). */
 function resolvePlacement(layout: Layout, name: string, dir: Direction, cx: number, cy: number): { x: number; y: number; direction: Direction; diagonal?: boolean } {
@@ -259,17 +261,32 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL, incoming }
   const power = useMemo(() => analysePower(layout.entities, rates), [layout.entities, rates]);
   // The steady-state simulation is heavier (~0.2 s per 1,000 buildings), so run it after edits settle.
   const [sim, setSim] = useState<SteadyStateResult | null>(null);
+  // What the labs research ('' = the most advanced the packs allow), remembered in this browser.
+  const [labResearch, setLabResearch] = useState(() => {
+    try {
+      return localStorage.getItem(LAB_RESEARCH_KEY) ?? '';
+    } catch {
+      return '';
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(LAB_RESEARCH_KEY, labResearch);
+    } catch {
+      /* private mode */
+    }
+  }, [labResearch]);
   useEffect(() => {
     const t = setTimeout(() => {
       try {
-        setSim(simulateLayout(layout, gameData, research));
+        setSim(simulateLayout(layout, gameData, research, { labResearch: labResearch || undefined }));
       } catch (err) {
         console.error('simulation failed', err);
         setSim(null);
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [layout, research]);
+  }, [layout, research, labResearch]);
   useEffect(() => rendererRef.current?.setBadges(buildBadges(view, layout.entities, rates, sim)), [view, layout.entities, rates, sim]);
   useEffect(() => rendererRef.current?.setContents(showContents ? entityContents(layout.entities, sim) : {}), [layout.entities, sim, showContents]);
   // While a pole is in hand (or one is selected) show supply areas and the wires it would make.
@@ -976,6 +993,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL, incoming }
             <h3>Factory</h3>
             <PowerSummary power={power} />
             <SimSummary sim={sim} />
+            <ResearchSummary sim={sim} chosen={labResearch} onChoose={setLabResearch} />
             <Bottlenecks sim={sim} entities={layout.entities} onSelect={setSelection} />
             {railCheck && <RailSummary check={railCheck} onSelect={(id) => setSelection([id])} />}
             <ProductionSummary rates={rates} />

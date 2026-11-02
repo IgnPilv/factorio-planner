@@ -274,7 +274,7 @@ export function SimSummary({ sim }: { sim: SteadyStateResult | null }) {
       <h4>As built</h4>
       {sim.outputs.length > 0 && (
         <>
-          <span className="muted small">Leaves the layout (open belt ends, chests, labs)</span>
+          <span className="muted small">Leaves the layout (open belt ends, chests)</span>
           <table className="flows">
             <tbody>
               {sim.outputs.map((f) => (
@@ -393,6 +393,47 @@ export function SelectionFlows({ sim, ids }: { sim: SteadyStateResult | null; id
         </table>
       )}
       <p className="muted small">Negative means the selection needs it from outside.</p>
+    </section>
+  );
+}
+
+/** What the labs research, how fast, and which packs they use; pick another tech. */
+export function ResearchSummary({ sim, chosen, onChoose }: { sim: SteadyStateResult | null; chosen: string; onChoose: (tech: string) => void }) {
+  const r = sim?.research;
+  if (!r) return null;
+  const techName = (n: string) => gameData.technologies[n]?.displayName ?? n;
+  const tech = gameData.technologies[r.tech];
+  const options = r.choices.includes(r.tech) ? r.choices : [r.tech, ...r.choices];
+  return (
+    <section className="summary-section">
+      <h4>Research</h4>
+      <label className="small">
+        Labs research{' '}
+        <select value={chosen} onChange={(e) => onChoose(e.target.value)} aria-label="Technology the labs research">
+          <option value="">Most advanced possible ({techName(r.choices[0] ?? r.tech)})</option>
+          {options.map((n) => (
+            <option key={n} value={n}>
+              {techName(n)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p>
+        <b>{fmtRate(r.unitsPerSecond * 60)}</b> units/min
+        {tech?.cost && <span className="muted small"> · {tech.cost.time} s per unit</span>}
+      </p>
+      {r.packs.length > 0 && (
+        <table className="flows">
+          <tbody>
+            {r.packs.map((f) => (
+              <tr key={f.name}>
+                <td>{displayNameOf(f.name)}</td>
+                <td>{fmtRate(f.perSecond * 60)}/min</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </section>
   );
 }
