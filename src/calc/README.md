@@ -92,6 +92,9 @@ splitter and chest, and nothing moves faster than its limit.
   (`energy_per_rotation`) per swing, a swing carrying a full hand, plus their
   drain (`powerW` on their transport state). Arm extension energy is left out;
   it is small for the usual pickup and drop distances.
+  Every powered electric machine draws its drain whether it runs or not
+  (idle, starved or without a recipe); the rest of its power scales with
+  activity.
   Power-plant parts only run as hard as demand needs.
 - **Chests** absorb whatever reaches them; a chest whose `recipe` names an
   item is an unlimited supply of it. Labs absorb science packs.

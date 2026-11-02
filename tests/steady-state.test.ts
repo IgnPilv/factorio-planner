@@ -318,8 +318,10 @@ describe('simulateLayout', () => {
     // The assembler and its two fast inserters split the 42 kW.
     expect(r.power.demandW).toBeCloseTo(42e3, -1);
     expect(r.entities.asm!.rate.powerW + inserterPower(r)).toBeCloseTo(42e3, -1);
-    expect(r.entities.asm!.activity).toBeLessThan(42e3 / 155e3);
-    expect(r.entities.asm!.activity).toBeGreaterThan(0.2);
+    // Drains first (assembler 5 kW, two fast inserters 0.5 kW each), then per
+    // unit of activity 150 kW for the assembler and 7 kJ per item moved
+    // (3 plates in, 1.5 gears out per second at full speed).
+    expect(r.entities.asm!.activity).toBeCloseTo((42e3 - 6e3) / (150e3 + 7e3 * 4.5), 3);
   });
 
   it('short power is shared evenly: every machine slows by the same fraction', () => {
@@ -356,6 +358,19 @@ describe('simulateLayout', () => {
     ];
     const r = simulateLayout({ entities: ents }, data);
     expect(r.entities.far!.status).toBe('no-power');
+  });
+
+  it('idle machines still draw their drain', () => {
+    // An assembler with nothing to make, and one with no recipe: 5 kW drain each, no inserters.
+    const ents = [
+      e('solar-panel', 0, 0, N),
+      e('assembling-machine-2', 4, 0, N, { recipe: 'iron-gear-wheel', id: 'starved' }),
+      e('assembling-machine-2', 8, 0, N, { id: 'blank' }),
+    ];
+    const r = simulateLayout({ entities: ents }, data);
+    expect(r.entities.starved!.activity).toBe(0);
+    expect(r.entities.starved!.rate.powerW).toBeCloseTo(5e3, 3);
+    expect(r.power.demandW).toBeCloseTo(10e3, 3);
   });
 
   it('electric inserters no pole reaches move nothing; burner inserters still do', () => {
