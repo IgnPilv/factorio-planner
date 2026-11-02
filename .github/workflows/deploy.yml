@@ -29,3 +29,24 @@ jobs:
           branch: gh-pages
           clean-exclude: pr-preview
           force: false
+
+  # PR previews are kept after merge (see preview.yml); keep the newest 30.
+  prune-previews:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+      - name: Remove all but the newest 30 PR previews
+        run: |
+          [ -d pr-preview ] || exit 0
+          old=$(ls pr-preview | grep -E '^pr-[0-9]+$' | sort -t- -k2 -n | head -n -30)
+          [ -n "$old" ] || exit 0
+          for d in $old; do git rm -rq "pr-preview/$d"; done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -qm "Prune old PR previews"
+          # A preview may be pushing at the same time: rebase and retry.
+          for i in 1 2 3; do git push origin gh-pages && exit 0; sleep $((i * 5)); git pull -q --rebase origin gh-pages; done
+          exit 1
