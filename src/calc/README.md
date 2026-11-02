@@ -98,6 +98,14 @@ splitter and chest, and nothing moves faster than its limit.
   reaches (when the layout has poles) gives no effect. On a short network the
   satisfaction s scales everything alike, drains and beacons included.
   Power-plant parts only run as hard as demand needs.
+- **Nuclear**: a reactor burns a uranium fuel cell every 200 s (40 MW) whether
+  or not its heat is used, and stops when its spent cells aren't taken out.
+  Reactors whose side midpoints meet (in line, touching) get +100% heat per
+  such neighbour. Reactors, heat pipes and heat exchangers join into heat
+  networks where their connection points meet (factorio-data positions; a heat
+  exchanger connects only on its back). Each heat exchanger takes 10 MW and
+  makes 103.09 steam/s at 500 °C. Heat pipe temperature drop and transfer limits
+  aren't modelled: a network passes on all the heat its reactors make.
 - **Chests** absorb whatever reaches them; a chest whose `recipe` names an
   item is an unlimited supply of it. Labs absorb science packs.
 - Status: a machine below 99.9% is `output-blocked` when it could run faster

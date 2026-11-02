@@ -47,6 +47,8 @@ export interface EntityRate {
   powerW: number;
   /** Fuel energy burned per second in W (burner machines and boilers). */
   fuelW: number;
+  /** Heat in W: taken from a heat network (heat exchangers, +) or given to it (reactors, −). */
+  heatW?: number;
   inputs: Flow[];
   outputs: Flow[];
   /** Number of beacons affecting this machine. */
@@ -166,6 +168,25 @@ export function machineRate(
         rate.powerW = rate.fuelW;
         rate.fuelW = 0;
       }
+      return rate;
+    }
+    case 'heat-exchanger': {
+      // A boiler heated from a heat network: 10 MW makes 103 steam/s at 500 °C.
+      const rate = emptyRate(warnings);
+      const out = boilerSteamPerSecond(entity);
+      rate.craftsPerSecond = out;
+      rate.inputs = [{ name: 'water', perSecond: out / STEAM_PER_WATER }];
+      rate.outputs = [{ name: 'steam', perSecond: out }];
+      rate.heatW = entity.energyUsage ?? 0;
+      return rate;
+    }
+    case 'reactor': {
+      // Burns fuel at its consumption (40 MW) and gives that much heat; the
+      // neighbour bonus is added by the layout model, which sees neighbours.
+      const rate = emptyRate(warnings);
+      rate.craftsPerSecond = 1;
+      rate.fuelW = entity.energyUsage ?? 0;
+      rate.heatW = -(entity.powerOutput ?? entity.energyUsage ?? 0);
       return rate;
     }
     case 'generator':

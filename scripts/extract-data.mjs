@@ -94,7 +94,8 @@ for (const t of ITEM_TYPES) {
       name: p.name, type: 'item', displayName: displayName(p.name), stackSize: p.stack_size,
       hidden: p.hidden || undefined,
       placeResult: typeof p.place_result === 'string' ? p.place_result : undefined,
-      fuelValue: energy(p.fuel_value), fuelCategory: p.fuel_value ? (p.fuel_category ?? 'chemical') : undefined,
+      fuelValue: energy(p.fuel_value), fuelCategory: p.fuel_value ? (p.fuel_category ?? arr(p.fuel_categories)?.[0] ?? 'chemical') : undefined,
+      burntResult: typeof p.burnt_result === 'string' ? p.burnt_result : undefined,
       subgroup: p.subgroup, order: p.order, icon: p.icon, wikiUrl: wikiUrl(p.name),
     });
   }
