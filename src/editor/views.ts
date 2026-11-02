@@ -67,6 +67,18 @@ export interface OverlayOptions {
   polePreview?: PoleInfo | null;
   /** Show every pole's supply area even in the normal view. */
   showPoleAreas?: boolean;
+  /** Draw wires between poles (user toggle). */
+  showWires?: boolean;
+}
+
+const WIRE_COLOR = 0xff9a3c;
+const poleDots = (power: PowerReport) => power.poles.map((p) => ({ x: p.cx, y: p.cy, color: WIRE_COLOR, r: 3 }));
+
+/** Red/yellow lightning markers on machines that lack power, shown in every view. */
+function powerMarkers(power: PowerReport) {
+  return Object.entries(power.status)
+    .filter(([, s]) => s !== 'powered')
+    .map(([id, s]) => ({ id, color: s === 'low' ? 0xffcc00 : 0xff4d4d }));
 }
 
 /** Wires as lines between pole centres. */
@@ -75,7 +87,7 @@ function wireLines(power: PowerReport, width: number) {
   return power.wires.map(([a, b]) => {
     const pa = byId.get(a)!;
     const pb = byId.get(b)!;
-    return { x1: pa.cx, y1: pa.cy, x2: pb.cx, y2: pb.cy, color: 0xe08a3c, width };
+    return { x1: pa.cx, y1: pa.cy, x2: pb.cx, y2: pb.cy, color: WIRE_COLOR, width };
   });
 }
 
@@ -83,27 +95,28 @@ function wireLines(power: PowerReport, width: number) {
 function previewLines(power: PowerReport, pole: PoleInfo) {
   return power.poles
     .filter((p) => p.id !== pole.id && (p.cx - pole.cx) ** 2 + (p.cy - pole.cy) ** 2 <= Math.min(p.reach, pole.reach) ** 2 + 1e-9)
-    .map((p) => ({ x1: pole.cx, y1: pole.cy, x2: p.cx, y2: p.cy, color: 0x9be37a, width: 2.5 }));
+    .map((p) => ({ x1: pole.cx, y1: pole.cy, x2: p.cx, y2: p.cy, color: 0x9be37a, width: 3 }));
 }
 
 export function buildViewOverlay(mode: ViewMode, entities: readonly PlacedEntity[], power: PowerReport, opts: OverlayOptions = {}): ViewOverlay {
   const preview = opts.polePreview;
+  const wires = opts.showWires !== false;
+  const markers = powerMarkers(power);
   if (mode === 'normal') {
-    // Wires are always visible, like copper cable in the game.
-    const lines = wireLines(power, 1.5);
-    const areas = opts.showPoleAreas ? power.poles.map((p) => ({ ...p.area, color: 0x4fa3ff, alpha: 0.1 })) : [];
+    const lines = wires ? wireLines(power, 2) : [];
+    const areas = opts.showPoleAreas ? power.poles.map((p) => ({ ...p.area, color: 0x4fa3ff, alpha: 0.14 })) : [];
     if (preview) {
-      areas.push({ ...preview.area, color: 0x9be37a, alpha: 0.18 });
+      areas.push({ ...preview.area, color: 0x9be37a, alpha: 0.22 });
       lines.push(...previewLines(power, preview));
     }
-    return { areas, lines };
+    return { areas, lines, dots: wires ? poleDots(power) : [], markers };
   }
   const dim = new Set<string>();
   if (mode === 'electric') {
     const poleNet = new Map<string, number>();
     power.networks.forEach((n) => n.poles.forEach((p) => poleNet.set(p, n.id)));
     const areas = power.poles.map((p) => ({ ...p.area, color: NETWORK_COLORS[(poleNet.get(p.id) ?? 0) % NETWORK_COLORS.length], alpha: 0.13 }));
-    const lines = wireLines(power, 2);
+    const lines = wires ? wireLines(power, 2.5) : [];
     if (preview) {
       areas.push({ ...preview.area, color: 0x9be37a, alpha: 0.2 });
       lines.push(...previewLines(power, preview));
@@ -116,7 +129,7 @@ export function buildViewOverlay(mode: ViewMode, entities: readonly PlacedEntity
       else if (isGenerator(def)) tints.push({ id: e.id, color: 0x4fa3ff, alpha: 0.35 });
       else if (def?.kind !== 'pole' && def?.kind !== 'accumulator') dim.add(e.id);
     }
-    return { areas, lines, tints, dim };
+    return { areas, lines, tints, dim, dots: wires ? poleDots(power) : [], markers };
   }
   // logistics: keep belts, inserters, pipes and storage; fade power gear and
   // draw each inserter's hand path from pickup to drop.
@@ -133,5 +146,5 @@ export function buildViewOverlay(mode: ViewMode, entities: readonly PlacedEntity
       lines.push({ x1: cx - dx * reach, y1: cy - dy * reach, x2: cx + dx * reach, y2: cy + dy * reach, color: 0x7dff9a, width: 2 });
     }
   }
-  return { dim, lines };
+  return { dim, lines, markers };
 }
