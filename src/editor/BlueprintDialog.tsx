@@ -76,16 +76,21 @@ function ExportPane({ entities, scope, onClose }: { entities: PlacedEntity[]; sc
 function ImportPane({ initial, onClose, onImport }: { initial?: string; onClose: () => void; onImport: (clip: Clipboard, note: string) => void }) {
   const [value, setValue] = useState(initial ?? '');
   const [error, setError] = useState('');
+  const [pending, setPending] = useState<{ clip: Clipboard; note: string; skipped: string[]; railNote: string } | null>(null);
   const run = () => {
     try {
       const { clipboard, unknown, label } = blueprintToClipboard(decodeBlueprintString(value));
       const missing = Object.entries(unknown).map(([n, c]) => `${c} × ${n}`);
+      const rails = Object.keys(unknown).some((n) => /rail|locomotive|wagon|train-stop/.test(n));
+      const railNote = rails ? ' Rails and trains are not in the layout editor yet; the City blocks tab builds rail grids.' : '';
       if (!clipboard) {
-        setError(missing.length ? `Nothing the planner knows in this blueprint (${missing.join(', ')}).` : 'This blueprint has no buildings.');
+        setError(missing.length ? `Nothing the planner knows in this blueprint (${missing.join(', ')}).${railNote}` : 'This blueprint has no buildings.');
         return;
       }
-      const note = `${label ? `"${label}": ` : ''}${clipboard.entities.length} buildings${missing.length ? `, skipped ${missing.join(', ')}` : ''}`;
-      onImport(clipboard, note);
+      const note = `${label ? `"${label}": ` : ''}${clipboard.entities.length} buildings${missing.length ? `, skipped ${missing.join(', ')}` : ''}${railNote}`;
+      // Say what is missing before placing a partial blueprint.
+      if (missing.length) setPending({ clip: clipboard, note, skipped: missing, railNote });
+      else onImport(clipboard, note);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -101,14 +106,29 @@ function ImportPane({ initial, onClose, onImport }: { initial?: string; onClose:
         onChange={(e) => {
           setValue(e.target.value);
           setError('');
+          setPending(null);
         }}
         placeholder="0eNq..."
       />
       {error && <p className="small warn">{error}</p>}
+      {pending && (
+        <div className="small warn">
+          <p>
+            Only part of this blueprint can be placed: {pending.clip.entities.length} building{pending.clip.entities.length === 1 ? '' : 's'}. Skipped (not in the planner{pending.railNote ? ', or need rails' : ', possibly from a mod'}): {pending.skipped.join(', ')}.
+            {pending.railNote}
+          </p>
+        </div>
+      )}
       <div className="tool-row">
-        <button className="primary" onClick={run} disabled={!value.trim()}>
-          Import
-        </button>
+        {pending ? (
+          <button className="primary" onClick={() => onImport(pending.clip, pending.note)}>
+            Place {pending.clip.entities.length} building{pending.clip.entities.length === 1 ? '' : 's'} anyway
+          </button>
+        ) : (
+          <button className="primary" onClick={run} disabled={!value.trim()}>
+            Import
+          </button>
+        )}
         <button onClick={onClose}>Cancel</button>
       </div>
     </>
