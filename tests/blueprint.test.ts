@@ -420,6 +420,31 @@ describe('blueprints with rails', () => {
     expect(railRoutes!.signals).toBe(4);
   });
 
+  it('moves buildings off rebuilt track and leaves no signal floating', () => {
+    const entities: BlueprintEntityInput[] = [
+      { name: 'curved-rail', position: { x: 1, y: 1 }, direction: 0 },
+      { name: 'curved-rail', position: { x: -3, y: -5 }, direction: 4 },
+      // Northbound signals: one on the straight, one beside the old 1.x curve.
+      { name: 'rail-signal', position: { x: 3.5, y: 20.5 }, direction: 4 },
+      { name: 'rail-chain-signal', position: { x: 1.5, y: -1.5 }, direction: 4 },
+    ];
+    for (let i = 0; i < 10; i++) {
+      entities.push({ name: 'straight-rail', position: { x: 2, y: 6 + 2 * i } });
+      entities.push({ name: 'straight-rail', position: { x: -4, y: -10 - 2 * i } });
+    }
+    // A lamp where the 2.0 track will run (the 2.0 S-bend is longer, so it doesn't follow the old curves exactly).
+    entities.push({ name: 'small-lamp', position: { x: 0.5, y: 2.5 } });
+    const { clipboard, railRoutes, unknown } = blueprintToClipboard({ item: 'blueprint', version: encodeVersion(1, 1, 110), entities: entities.map((e, i) => ({ ...e, entity_number: i + 1 })) });
+    expect(railRoutes!.moved).toBeGreaterThan(0);
+    // Every signal guards track, facing the way it was set: none is left floating beside the old curve.
+    for (const e of clipboard!.entities.filter((x) => x.name.startsWith('rail')))
+      expect(signalAt(clipboard!.rails as PlacedRail[], e.x, e.y, e.direction)).toEqual({ direction: e.direction, diagonal: !!e.diagonal });
+    expect(unknown).toEqual({ 'rail-chain-signal (beside 1.x curve, track rebuilt)': 1 });
+    // Everything in the clipboard can be pasted: nothing sits on the track or on another building.
+    const res = pasteClipboard({ ...emptyLayout(), water: [] }, clipboard!, 0, 0);
+    expect(res.blocked).toBe(0);
+  });
+
   it('places modded buildings as their base-game counterparts', () => {
     expect(vanillaName('substation-2')).toBe('substation');
     expect(vanillaName('assembling-machine-4')).toBe('assembling-machine-3');

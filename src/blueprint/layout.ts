@@ -15,7 +15,7 @@
 import { gameData } from '../data';
 import { ENTITIES } from '../editor/catalog';
 import { footprint, groupBounds, type BlockGrid, type Clipboard, type Direction, type PlacedEntity } from '../editor/model';
-import { evenFloor, isRailName, RAIL_ITEM, railValid, signalAt, trainStopAt, type PlacedRail } from '../editor/rails';
+import { evenFloor, isRailName, RAIL_ITEM, railTiles, railValid, signalAt, trainStopAt, type PlacedRail } from '../editor/rails';
 import { convertLegacyRails, legacyEnds, type LegacyConversion } from './legacyRails';
 import type { RailEnd } from '../rails/geometry';
 import { poleInfo } from '../editor/power';
@@ -325,7 +325,7 @@ export interface ImportResult {
   /** Modded buildings placed as a base-game one: "from -> to" with counts. */
   replaced: Record<string, number>;
   /** 1.x curve sections rebuilt with 2.0 track. */
-  railRoutes?: { rebuilt: number; failed: number; legacyPieces: number; signals?: number };
+  railRoutes?: { rebuilt: number; failed: number; legacyPieces: number; signals?: number; moved?: number; resignalled?: number };
   label?: string;
 }
 
@@ -362,6 +362,7 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
   }
   let railRoutes: ImportResult['railRoutes'];
   let junctionSignals: LegacyConversion['ends'] = [];
+  const strays: { name: string; x: number; y: number; facing: number }[] = [];
   if (legacyTrack.length) {
     // 1.x curves and diagonals: plan the same routes again with 2.0 track.
     const conv = convertLegacyRails(legacyStraights, legacyTrack);
@@ -377,6 +378,9 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
   }
   // When some track can't be read, its signals, stops and trains are left out
   // too, rather than floating beside missing track.
+  // Tiles under the track, when some of it was rebuilt: signals and buildings must keep off them.
+  const track = new Set<string>();
+  if (railRoutes) for (const r of rails) for (const t of railTiles(r as PlacedRail)) track.add(t);
   for (const orig of entities) {
     if (RAIL_PIECE.test(orig.name)) continue;
     let be = legacy && LEGACY_NAMES[orig.name] ? { ...orig, name: LEGACY_NAMES[orig.name]! } : orig;
@@ -392,6 +396,13 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
     // Trains are not placed: they stand on track and are not part of a layout.
     // A signal stays when it still stands beside track that came through.
     const orphan = (lostTrack || !!railRoutes) && RAIL_PARTS.has(def?.kind ?? '') && !(def?.kind === 'rail-signal' && signalOnTrack(rails, be)) && !(def?.kind === 'train-stop' && stopOnTrack(rails, be));
+    const onTrack = railRoutes && def?.kind === 'rail-signal' && track.has(`${Math.floor(be.position.x)},${Math.floor(be.position.y)}`);
+    if ((orphan || onTrack) && railRoutes && def?.kind === 'rail-signal') {
+      // Try again once the junctions are signalled: it may fit beside the rebuilt track.
+      const raw = be.direction ?? 0;
+      strays.push({ name: be.name, x: Math.floor(be.position.x), y: Math.floor(be.position.y), facing: legacy ? (raw * 2) % 16 : raw });
+      continue;
+    }
     if (!def || def.kind === 'rolling-stock' || orphan) {
       const why = orphan && railRoutes && !lostTrack ? `${be.name} (beside 1.x curve, track rebuilt)` : be.name;
       unknown[why] = (unknown[why] ?? 0) + 1;
@@ -416,7 +427,13 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
     Object.assign(e, readLogistics(def.kind, def.name, be));
     placed.push(e);
   }
-  if (junctionSignals.length && railRoutes) railRoutes.signals = addJunctionSignals(placed, junctionSignals);
+  if (railRoutes) {
+    const moved = clearTrack(placed, track, unknown);
+    if (moved) railRoutes.moved = moved;
+    if (junctionSignals.length) railRoutes.signals = addJunctionSignals(placed, rails, track, junctionSignals);
+    const replacedSignals = replaceStraySignals(placed, rails, track, strays, unknown, railRoutes.rebuilt > 0);
+    if (replacedSignals) railRoutes.resignalled = replacedSignals;
+  }
   if (!placed.length && !rails.length) return { clipboard: null, unknown, replaced, railRoutes, label: bp.label };
   // Signals guard the track on their right: take their facing from the track beside them.
   if (rails.length)
@@ -460,6 +477,97 @@ function signalOnTrack(rails: readonly Omit<PlacedRail, 'id'>[], be: BlueprintEn
 
 const TRAVEL_STEP: Record<number, [number, number] | undefined> = { 0: [0, -1], 4: [1, 0], 8: [0, 1], 12: [-1, 0] };
 
+const entityTiles = (e: Omit<PlacedEntity, 'id'>): string[] => {
+  const def = ENTITIES[e.name];
+  if (!def) return [];
+  const { w, h } = footprint(def, e.direction);
+  const out: string[] = [];
+  for (let dx = 0; dx < w; dx++) for (let dy = 0; dy < h; dy++) out.push(`${e.x + dx},${e.y + dy}`);
+  return out;
+};
+
+/** Tiles taken by buildings, and the signals among them. */
+function occupancy(placed: readonly Omit<PlacedEntity, 'id'>[]) {
+  const taken = new Set<string>();
+  const signals: Omit<PlacedEntity, 'id'>[] = [];
+  for (const e of placed) {
+    for (const t of entityTiles(e)) taken.add(t);
+    if (ENTITIES[e.name]?.kind === 'rail-signal') signals.push(e);
+  }
+  return { taken, signals };
+}
+
+/**
+ * Rebuilt 2.0 curves are wider than the 1.x ones and can run through buildings
+ * that stood beside the old track. Move each such building to the nearest free
+ * spot (up to 8 tiles away, which keeps roboport and pole coverage close to the
+ * original), or leave it out when there is none. Returns how many moved.
+ */
+function clearTrack(placed: Omit<PlacedEntity, 'id'>[], track: ReadonlySet<string>, unknown: Record<string, number>): number {
+  const blocking = placed.filter((e) => !RAIL_PARTS.has(ENTITIES[e.name]?.kind ?? '') && entityTiles(e).some((t) => track.has(t)));
+  if (!blocking.length) return 0;
+  const { taken } = occupancy(placed.filter((e) => !blocking.includes(e)));
+  const offsets: [number, number][] = [];
+  for (let dx = -8; dx <= 8; dx++) for (let dy = -8; dy <= 8; dy++) if (dx || dy) offsets.push([dx, dy]);
+  offsets.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
+  let moved = 0;
+  for (const e of blocking) {
+    const spot = offsets.find(([dx, dy]) => entityTiles({ ...e, x: e.x + dx, y: e.y + dy }).every((t) => !track.has(t) && !taken.has(t)));
+    if (spot) {
+      e.x += spot[0];
+      e.y += spot[1];
+      for (const t of entityTiles(e)) taken.add(t);
+      moved++;
+    } else {
+      placed.splice(placed.indexOf(e), 1);
+      const why = `${e.name} (in the way of rebuilt track)`;
+      unknown[why] = (unknown[why] ?? 0) + 1;
+    }
+  }
+  return moved;
+}
+
+/**
+ * Signals that stood beside 1.x curves or diagonals: put each on the nearest
+ * tile (up to 4 away) where it guards the rebuilt track facing the same way,
+ * on straight or 45° track. The rest are reported. Returns how many were placed.
+ */
+function replaceStraySignals(
+  placed: Omit<PlacedEntity, 'id'>[],
+  rails: readonly Omit<PlacedRail, 'id'>[],
+  track: ReadonlySet<string>,
+  strays: readonly { name: string; x: number; y: number; facing: number }[],
+  unknown: Record<string, number>,
+  rebuilt: boolean,
+): number {
+  const { taken, signals } = occupancy(placed);
+  const near: [number, number][] = [];
+  for (let dx = -4; dx <= 4; dx++) for (let dy = -4; dy <= 4; dy++) near.push([dx, dy]);
+  near.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
+  let added = 0;
+  for (const s of strays) {
+    const spot = near
+      .map(([dx, dy]) => ({ x: s.x + dx, y: s.y + dy }))
+      .find(({ x, y }) => {
+        if (taken.has(`${x},${y}`) || track.has(`${x},${y}`) || signals.some((o) => Math.abs(o.x - x) <= 1 && Math.abs(o.y - y) <= 1)) return false;
+        const at = signalAt(rails as PlacedRail[], x, y, Math.floor(s.facing / 4));
+        return !!at && at.direction * 4 + (at.diagonal ? 2 : 0) === s.facing;
+      });
+    if (!spot) {
+      const why = rebuilt ? `${s.name} (beside 1.x curve, track rebuilt)` : s.name;
+      unknown[why] = (unknown[why] ?? 0) + 1;
+      continue;
+    }
+    const e: Omit<PlacedEntity, 'id'> = { name: s.name, x: spot.x, y: spot.y, direction: Math.floor(s.facing / 4) as Direction };
+    if (s.facing % 4 === 2) e.diagonal = true;
+    placed.push(e);
+    signals.push(e);
+    taken.add(`${spot.x},${spot.y}`);
+    added++;
+  }
+  return added;
+}
+
 /**
  * Signal the junctions rebuilt from 1.x curves: a chain signal where each route
  * enters, a rail signal where it leaves, on the right of the track like the
@@ -468,16 +576,9 @@ const TRAVEL_STEP: Record<number, [number, number] | undefined> = { 0: [0, -1], 
  * track stays one-way and unsignalled track stays unsignalled. Skipped where a
  * building or another signal is already close. Returns how many were added.
  */
-function addJunctionSignals(placed: Omit<PlacedEntity, 'id'>[], routes: LegacyConversion['ends']): number {
-  const taken = new Set<string>();
-  const existing: { x: number; y: number; direction: number }[] = [];
-  for (const e of placed) {
-    const def = ENTITIES[e.name];
-    if (!def) continue;
-    const { w, h } = footprint(def, e.direction);
-    for (let dx = 0; dx < w; dx++) for (let dy = 0; dy < h; dy++) taken.add(`${e.x + dx},${e.y + dy}`);
-    if (def.kind === 'rail-signal' && !e.diagonal) existing.push(e);
-  }
+function addJunctionSignals(placed: Omit<PlacedEntity, 'id'>[], rails: readonly Omit<PlacedRail, 'id'>[], track: ReadonlySet<string>, routes: LegacyConversion['ends']): number {
+  const { taken, signals: all } = occupancy(placed);
+  const existing = all.filter((e) => !e.diagonal);
   const facingOf = (travel: number) => ((travel + 8) % 16) / 4;
   const signalTile = (j: RailEnd) => {
     const [fx, fy] = TRAVEL_STEP[j.dir]!;
@@ -502,8 +603,21 @@ function addJunctionSignals(placed: Omit<PlacedEntity, 'id'>[], routes: LegacyCo
   let added = 0;
   // Chain signals first, so a joint that is both an exit and an entry gets the chain signal.
   for (const w of wanted.sort((a, b) => Number(b.chain) - Number(a.chain))) {
-    const { x, y } = signalTile(w.at);
-    if (taken.has(`${x},${y}`) || placedSignals.some((s) => Math.abs(s.x - x) <= 1 && Math.abs(s.y - y) <= 1)) continue;
+    // At the joint itself, or a few joints further out along the straight track when the junction's own track is in the way.
+    const [fx, fy] = TRAVEL_STEP[w.at.dir]!;
+    const out = w.chain ? -2 : 2;
+    let spot: { x: number; y: number } | undefined;
+    for (let k = 0; k < 4 && !spot; k++) {
+      const j = { x: w.at.x + fx * out * k, y: w.at.y + fy * out * k, dir: w.at.dir };
+      const t = signalTile(j);
+      const key = `${t.x},${t.y}`;
+      if (taken.has(key) || track.has(key)) continue;
+      if (placedSignals.some((s) => Math.abs(s.x - t.x) <= 1 && Math.abs(s.y - t.y) <= 1)) break;
+      const at = signalAt(rails as PlacedRail[], t.x, t.y, facingOf(j.dir));
+      if (at && !at.diagonal && at.direction === facingOf(j.dir)) spot = t;
+    }
+    if (!spot) continue;
+    const { x, y } = spot;
     const e = { name: w.chain ? 'rail-chain-signal' : 'rail-signal', x, y, direction: facingOf(w.at.dir) as Direction };
     placed.push(e);
     placedSignals.push(e);
