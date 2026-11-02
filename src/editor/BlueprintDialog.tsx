@@ -3,9 +3,11 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { decodeBlueprintString, encodeBlueprintString } from '../blueprint/format';
-import { blueprintToClipboard, layoutToBlueprint } from '../blueprint/layout';
+import { blueprintToClipboard, layoutToBlueprint, type ImportResult } from '../blueprint/layout';
+import { centreLine } from '../rails/geometry';
+import { railPiece } from './rails';
 import { ENTITIES } from './catalog';
-import type { BlockGrid, Clipboard, PlacedEntity, PlacedRail } from './model';
+import { footprint, type BlockGrid, type Clipboard, type PlacedEntity, type PlacedRail } from './model';
 
 export type BlueprintDialogMode =
   | { kind: 'export'; entities: PlacedEntity[]; rails?: PlacedRail[]; scope: 'selection' | 'layout'; grid?: BlockGrid }
@@ -90,6 +92,7 @@ function ExportPane({ entities, rails, scope, grid, onClose }: { entities: Place
 
 interface ImportSummary {
   clip: Clipboard;
+  preview?: ImportResult['preview'];
   note: string;
   coming: string[];
   converted: string[];
@@ -100,7 +103,7 @@ interface ImportSummary {
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 function summarise(value: string): ImportSummary | string {
-  const { clipboard, unknown, replaced, railRoutes, label } = blueprintToClipboard(decodeBlueprintString(value));
+  const { clipboard, unknown, replaced, railRoutes, preview, label } = blueprintToClipboard(decodeBlueprintString(value));
   const skipped = Object.entries(unknown).map(([n, c]) => `${c} × ${n}`);
   const names = Object.keys(unknown);
   const notes: string[] = [];
@@ -125,7 +128,7 @@ function summarise(value: string): ImportSummary | string {
   if (railRoutes?.moved) converted.splice(1, 0, `${plural(railRoutes.moved, 'building')} moved a few tiles to make room for the wider 2.0 curves.`);
   if (railRoutes?.signals) converted.splice(1, 0, `${plural(railRoutes.signals, 'signal')} added at the rebuilt junctions: chain signals where trains enter, rail signals where they leave.`);
   const note = `${label ? `"${label}": ` : ''}${plural(clipboard.entities.length, 'building')}${clipboard.rails?.length ? `, ${clipboard.rails.length} rails` : ''}`;
-  return { clip: clipboard, note, coming, converted, skipped, notes };
+  return { clip: clipboard, preview, note, coming, converted, skipped, notes };
 }
 
 function ImportPane({ initial, onClose, onImport }: { initial?: string; onClose: () => void; onImport: (clip: Clipboard, note: string) => void }) {
@@ -164,6 +167,7 @@ function ImportPane({ initial, onClose, onImport }: { initial?: string; onClose:
       {error && <p className="small warn">{error}</p>}
       {summary && (
         <div className="bp-summary small">
+          {summary.preview && <ImportPreview clip={summary.clip} preview={summary.preview} />}
           <h4>Coming in</h4>
           <ul>{summary.coming.map((c) => <li key={c}>{c}</li>)}</ul>
           {summary.converted.length > 0 && (
@@ -197,5 +201,73 @@ function ImportPane({ initial, onClose, onImport }: { initial?: string; onClose:
         <button onClick={onClose}>Cancel</button>
       </div>
     </>
+  );
+}
+
+const PREVIEW = { track: '#7d7d7d', rebuilt: '#ff9f1c', building: '#55606c', moved: '#4fa3ff', signal: '#5fd35f', dropped: '#ff4d4d', bg: '#1b1d1f' };
+
+/** A small map of the imported blueprint: what was rebuilt, moved, added and left out. */
+function ImportPreview({ clip, preview }: { clip: Clipboard; preview: NonNullable<ImportResult['preview']> }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    const W = canvas.clientWidth || 500, H = 220;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    const k = Math.min((W - 8) / clip.w, (H - 8) / clip.h);
+    const ox = (W - clip.w * k) / 2, oy = (H - clip.h * k) / 2;
+    ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * ox, dpr * oy);
+    ctx.fillStyle = PREVIEW.bg;
+    ctx.fillRect(-ox / k, -oy / k, W / k, H / k);
+    const moved = new Set(preview.movedEntities), added = new Set(preview.addedSignals), rebuilt = new Set(preview.rebuiltRails);
+    clip.entities.forEach((e, i) => {
+      const def = ENTITIES[e.name];
+      if (!def) return;
+      const { w, h } = footprint(def, e.direction);
+      const signal = def.kind === 'rail-signal';
+      ctx.fillStyle = moved.has(i) ? PREVIEW.moved : added.has(i) ? PREVIEW.signal : signal ? PREVIEW.track : PREVIEW.building;
+      // Highlights stay at least a few pixels across however far the map is zoomed out.
+      const pad = moved.has(i) || added.has(i) ? -Math.max(0, 1.5 / k - 0.5) : 0.1;
+      ctx.fillRect(e.x + pad, e.y + pad, w - 2 * pad, h - 2 * pad);
+    });
+    ctx.lineCap = 'round';
+    const line = Math.max(1.2, 2.5 / k);
+    for (const pass of [false, true])
+      (clip.rails ?? []).forEach((r, i) => {
+        if (rebuilt.has(i) !== pass) return;
+        const pts = centreLine(railPiece(r));
+        ctx.strokeStyle = pass ? PREVIEW.rebuilt : PREVIEW.track;
+        ctx.lineWidth = pass ? line * 1.6 : line;
+        ctx.beginPath();
+        pts.forEach((p, j) => (j ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+        ctx.stroke();
+      });
+    ctx.strokeStyle = PREVIEW.dropped;
+    ctx.lineWidth = line * 0.8;
+    const r = Math.max(0.8, 2.5 / k);
+    for (const d of preview.dropped) {
+      const cx = d.x + 0.5, cy = d.y + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(cx - r, cy - r);
+      ctx.lineTo(cx + r, cy + r);
+      ctx.moveTo(cx + r, cy - r);
+      ctx.lineTo(cx - r, cy + r);
+      ctx.stroke();
+    }
+  }, [clip, preview]);
+  const swatch = (c: string) => <i className="bp-swatch" style={{ background: c }} />;
+  return (
+    <figure className="bp-preview">
+      <canvas ref={ref} />
+      <figcaption>
+        <span>{swatch(PREVIEW.rebuilt)} rebuilt track</span>
+        <span>{swatch(PREVIEW.moved)} moved</span>
+        <span>{swatch(PREVIEW.signal)} new signals</span>
+        <span>{swatch(PREVIEW.dropped)} left out</span>
+      </figcaption>
+    </figure>
   );
 }
