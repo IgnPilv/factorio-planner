@@ -235,3 +235,78 @@ describe('against blueprints made by the game', () => {
     expect(checked).toBeGreaterThan(50);
   });
 });
+
+describe('inserter filters, splitter settings and chest requests', () => {
+  it('writes the 2.0 fields', () => {
+    const { blueprint } = layoutToBlueprint([
+      ent('fast-inserter', 0, 0, 0, { filters: ['iron-plate', 'copper-plate'], filterMode: 'blacklist' }),
+      ent('splitter', 2, 0, 0, { inputPriority: 'right', outputPriority: 'left', filters: ['electronic-circuit'] }),
+      ent('requester-chest', 5, 0, 0, { requests: [{ name: 'steel-plate', count: 3 }] }),
+      ent('splitter', 7, 0, 0, { filters: ['iron-plate'] }), // a filter without output priority is dropped
+    ]);
+    const [ins, spl, req, spl2] = blueprint.entities!;
+    expect(ins).toMatchObject({
+      use_filters: true,
+      filter_mode: 'blacklist',
+      filters: [
+        { index: 1, name: 'iron-plate', quality: 'normal', comparator: '=' },
+        { index: 2, name: 'copper-plate', quality: 'normal', comparator: '=' },
+      ],
+    });
+    expect(spl).toMatchObject({ input_priority: 'right', output_priority: 'left', filter: { name: 'electronic-circuit' } });
+    expect(req!.request_filters).toEqual({ sections: [{ index: 1, filters: [{ index: 1, name: 'steel-plate', quality: 'normal', comparator: '=', count: 3 }] }] });
+    expect(spl2!.filter).toBeUndefined();
+  });
+
+  it('round-trips through a string', () => {
+    const layout = [
+      ent('inserter', 0, 0, 2, { filters: ['coal'] }),
+      ent('splitter', 2, 0, 1, { outputPriority: 'right', filters: ['stone'] }),
+      ent('buffer-chest', 5, 0, 0, { requests: [{ name: 'iron-plate', count: 100 }, { name: 'copper-plate', count: 50 }] }),
+    ];
+    const { clipboard } = blueprintToClipboard(decodeBlueprintString(encodeBlueprintString(layoutToBlueprint(layout).blueprint)));
+    const [a, b, c] = clipboard!.entities;
+    expect(a).toMatchObject({ filters: ['coal'] });
+    expect(a!.filterMode).toBeUndefined();
+    expect(b).toMatchObject({ outputPriority: 'right', filters: ['stone'] });
+    expect(c!.requests).toEqual([{ name: 'iron-plate', count: 100 }, { name: 'copper-plate', count: 50 }]);
+  });
+
+  it('reads and reproduces the settings in blueprints made by the game', async () => {
+    const { GAME_LOGISTICS_BLUEPRINTS } = await import('./fixtures/game-blueprints');
+    const { ENTITIES } = await import('../src/editor/catalog');
+    const seen = new Set<string>();
+    for (const s of GAME_LOGISTICS_BLUEPRINTS) {
+      const bp = decodeBlueprintString(s);
+      bp.entities = (bp.entities ?? []).filter((e) => ENTITIES[e.name]);
+      const { clipboard } = blueprintToClipboard(bp);
+      const out = layoutToBlueprint(clipboard!.entities.map((e, i) => ({ ...e, id: `g${i}` }))).blueprint.entities!;
+      bp.entities.forEach((o, i) => {
+        const r = out[i]!;
+        if (o.request_filters) {
+          seen.add('requests');
+          const strip = (rf: unknown) => (rf as { sections: { filters: { name: string; count: number }[] }[] }).sections.flatMap((x) => x.filters.map((f) => [f.name, f.count]));
+          expect(strip(r.request_filters)).toEqual(strip(o.request_filters));
+        }
+        if (o.output_priority) {
+          seen.add('splitter');
+          expect([r.output_priority, (r.filter as { name: string } | undefined)?.name]).toEqual([o.output_priority, (o.filter as { name: string } | undefined)?.name]);
+        }
+      });
+    }
+    expect([...seen].sort()).toEqual(['requests', 'splitter']);
+  });
+
+  it('reads 1.1 inserter filters and requests', () => {
+    const { clipboard } = blueprintToClipboard({
+      item: 'blueprint',
+      version: encodeVersion(1, 1, 100),
+      entities: [
+        { entity_number: 1, name: 'fast-inserter', position: { x: 0.5, y: 0.5 }, filters: [{ index: 1, name: 'coal' }] },
+        { entity_number: 2, name: 'requester-chest', position: { x: 1.5, y: 0.5 }, request_filters: [{ index: 1, name: 'coal', count: 50 }] },
+      ],
+    });
+    expect(clipboard!.entities[0]!.filters).toEqual(['coal']);
+    expect(clipboard!.entities[1]!.requests).toEqual([{ name: 'coal', count: 50 }]);
+  });
+});
