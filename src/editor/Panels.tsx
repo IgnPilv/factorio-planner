@@ -231,6 +231,10 @@ export function FlowState({ state, transport }: { state?: EntityState; transport
         <p>
           {fmtRate(transport.perSecond)}/s of {fmtRate(transport.capacity)}/s ({Math.round(transport.utilization * 100)}%)
         </p>
+        {transport.powerShare === 0 && <p className="warn">No power: no electric pole reaches this inserter.</p>}
+        {transport.powerShare !== undefined && transport.powerShare > 0 && (
+          <p className="warn">Low power: runs at {Math.round(transport.powerShare * 100)}% speed.</p>
+        )}
         {transport.items.length > 0 && (
           <ul className="flow-list">
             {transport.items.map((f) => (
@@ -318,6 +322,7 @@ export function SimSummary({ sim }: { sim: SteadyStateResult | null }) {
 
 const BOTTLENECK_TEXT: Record<Bottleneck['kind'], string> = {
   missing: 'nothing delivers',
+  unpowered: 'no pole reaches it',
   starved: 'starved',
   'output-blocked': 'output blocked',
   power: 'short of power',

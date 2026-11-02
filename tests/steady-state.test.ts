@@ -214,8 +214,10 @@ describe('simulateLayout', () => {
       e('wooden-chest', 4, 2, N, { recipe: 'coal' }),
       e('inserter', 3, 2, 3),
       e('steam-engine', 0, 4, N, { id: 'engine' }),
+      e('small-electric-pole', 3, 3), // reaches the boiler's coal inserter
       e('small-electric-pole', 3, 5),
       e('small-electric-pole', 8, 3),
+      e('small-electric-pole', 8, 7), // the output inserters
       ...Array.from({ length: 2 }, (_, i) => e('assembling-machine-2', 6 + i * 3, 4, N, { recipe: 'iron-gear-wheel', id: `asm${i}` })),
       e('wooden-chest', 20, 0, N, { recipe: 'iron-plate' }),
     ];
@@ -340,5 +342,51 @@ describe('simulateLayout', () => {
     ];
     const r = simulateLayout({ entities: ents }, data);
     expect(r.entities.far!.status).toBe('no-power');
+  });
+
+  it('electric inserters no pole reaches move nothing; burner inserters still do', () => {
+    const build = (name: string) =>
+      simulateLayout(
+        {
+          entities: [
+            e('solar-panel', 0, 0, N),
+            e('small-electric-pole', 3, 0),
+            e('wooden-chest', 20, 1, N, { recipe: 'iron-plate' }),
+            e(name, 21, 1, E, { id: 'ins' }),
+            e('wooden-chest', 22, 1, N, { id: 'dst' }),
+          ],
+        },
+        data,
+      );
+    const electric = build('inserter');
+    expect(electric.transport.ins!.perSecond).toBe(0);
+    expect(electric.transport.ins!.powerShare).toBe(0);
+    const burner = build('burner-inserter');
+    expect(burner.transport.ins!.perSecond).toBeGreaterThan(0);
+    expect(burner.transport.ins!.powerShare).toBeUndefined();
+  });
+
+  it('inserters on a short network slow down with its machines', () => {
+    // One solar panel (42 kW average) for an assembler 2 (155 kW) on gears.
+    const ents = [
+      e('solar-panel', 0, 0, N),
+      e('wooden-chest', 4, 1, N, { recipe: 'iron-plate' }),
+      e('fast-inserter', 5, 1, E, { id: 'in' }),
+      e('assembling-machine-2', 6, 0, N, { recipe: 'iron-gear-wheel', id: 'asm' }),
+      e('fast-inserter', 9, 1, E, { id: 'out' }),
+      e('wooden-chest', 10, 1, N),
+    ];
+    const r = simulateLayout({ entities: ents }, data);
+    const share = r.entities.asm!.activity;
+    expect(share).toBeCloseTo(42e3 / 155e3, 3);
+    const full = inserterCapacity(data.entities['fast-inserter']!, undefined, { e: data.entities['wooden-chest']! }, { e: data.entities['assembling-machine-2']! });
+    // The slowed input inserter now limits the assembler a little below the
+    // network's share, so the share settles where demand meets supply.
+    const ps = r.transport.in!.powerShare!;
+    expect(ps).toBeGreaterThan(share);
+    expect(ps).toBeLessThan(1);
+    expect(r.transport.in!.capacity).toBeCloseTo(full * ps, 3);
+    expect(r.transport.in!.utilization).toBeCloseTo(1, 3);
+    expect(r.power.demandW).toBeCloseTo(42e3, -1);
   });
 });
