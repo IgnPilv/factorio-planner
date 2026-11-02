@@ -6,25 +6,15 @@ import { gameData } from '../data';
 import { centreLine, type RailPiece } from '../rails/geometry';
 import { signalPosition } from '../rails/signals';
 import { trainStopEntity } from '../rails/blueprint';
-import { analyse, avoidRails, buildDesign, DEFAULT_SPEC, gridBuildings, type BlockSpec, type Status } from './block';
+import { analyse, avoidRails, buildDesign, corridorSubstations, DEFAULT_SPEC, gridBuildings, type BlockSpec, type Status } from './block';
 import { blockBlueprint, blockBook } from './export';
 import { constructionRect, logisticsRect, supplyRect, type Rect } from './network';
+import { designToLayout } from './toEditor';
+import { PRESETS, presetSpec } from './presets';
+import type { Layout } from '../editor/model';
 import './cityblock.css';
 
-const STORAGE_KEY = 'factorio-planner.cityblock.v1';
-
-interface Preset {
-  label: string;
-  spec: Partial<BlockSpec>;
-  substations: number;
-  roboports: number;
-}
-
-const PRESETS: Preset[] = [
-  { label: '54x54 inner, 3x3 substations, 1 roboport', spec: { pitch: 66, corridor: 12, locomotives: 1, wagons: 2 }, substations: 3, roboports: 1 },
-  { label: '90x90 inner, 5x5 substations, 2x2 roboports', spec: { pitch: 102, corridor: 12, locomotives: 1, wagons: 4 }, substations: 5, roboports: 2 },
-  { label: '100 grid, 5x5 substations, 2x2 roboports', spec: { pitch: 100, corridor: 12, locomotives: 1, wagons: 4 }, substations: 5, roboports: 2 },
-];
+const STORAGE_KEY = 'factorio-planner.cityblock.v2';
 
 type Tool = 'substation' | 'roboport' | 'medium-electric-pole' | 'big-electric-pole' | 'erase';
 const TOOLS: { id: Tool; label: string }[] = [
@@ -52,14 +42,17 @@ function initialSpec(): BlockSpec {
   } catch {
     /* storage unavailable */
   }
-  const p = PRESETS[1];
-  const spec = { ...DEFAULT_SPEC, ...p.spec };
-  return { ...spec, buildings: gridBuildings(spec, p.substations, p.roboports) };
+  return presetSpec(PRESETS[1]!);
 }
 
 const STATUS_ICON: Record<Status, string> = { pass: '✓', warn: '!', fail: '✕', info: 'i' };
 
-export function CityBlocks() {
+export interface CityBlocksProps {
+  /** Open blocks in the layout editor, at world coordinates. */
+  onOpenInEditor?: (layout: Layout, note: string) => void;
+}
+
+export function CityBlocks({ onOpenInEditor }: CityBlocksProps) {
   const [spec, setSpec] = useState<BlockSpec>(initialSpec);
   const [tool, setTool] = useState<Tool>('substation');
   const [layers, setLayers] = useState<Record<Layer, boolean>>({
@@ -97,6 +90,15 @@ export function CityBlocks() {
     } catch {
       setCopied('');
     }
+  };
+
+  const problems = result.checks.filter((c) => c.status === 'fail' || c.status === 'warn');
+  const presetIndex = PRESETS.findIndex((p) => Object.entries(p.spec).every(([k, v]) => spec[k as keyof BlockSpec] === v) && spec.offset === DEFAULT_SPEC.offset);
+  const [editorBlocks, setEditorBlocks] = useState(3);
+  const openInEditor = () => {
+    if (!onOpenInEditor) return;
+    const d = buildDesign({ ...spec, tiles: editorBlocks });
+    onOpenInEditor(designToLayout(d), `${editorBlocks}×${editorBlocks} city blocks, ${spec.pitch} grid`);
   };
 
   const set = <K extends keyof BlockSpec>(k: K, v: BlockSpec[K]) => setSpec((s) => ({ ...s, [k]: v }));
@@ -196,31 +198,26 @@ export function CityBlocks() {
   return (
     <div className="cb">
       <aside className="cb-side">
-        <h3>Preset</h3>
-        <select
-          defaultValue=""
-          onChange={(e) => {
-            const p = PRESETS[Number(e.target.value)];
-            if (!p) return;
-            const s = { ...spec, ...p.spec };
-            setSubN(p.substations);
-            setRoboN(p.roboports);
-            setSpec({ ...s, buildings: avoidRails(s, gridBuildings(s, p.substations, p.roboports)) });
-            e.target.value = '';
-          }}
-        >
-          <option value="">Load a preset…</option>
-          {PRESETS.map((p, i) => <option key={i} value={i}>{p.label}</option>)}
-        </select>
-
-        <h3>Global grid</h3>
-        {num('pitch', 20, 256, 2)}
-        {num('offset', -64, 64)}
-        {num('corridor', 2, 64, 2)}
-        {num('trackSpacing', 2, 16, 2)}
+        <h3>1 · Pick a design</h3>
+        <div className="cb-presets">
+          {PRESETS.map((p, i) => (
+            <button
+              key={i}
+              className={presetIndex === i ? 'cb-preset active' : 'cb-preset'}
+              onClick={() => {
+                setSubN(p.substations);
+                setRoboN(p.roboports);
+                setSpec(presetSpec(p));
+              }}
+            >
+              <b>{p.label}</b>
+              <span>{p.note}</span>
+            </button>
+          ))}
+        </div>
         <label className="cb-check">
           <input type="checkbox" checked={spec.junctions} onChange={(e) => set('junctions', e.target.checked)} />
-          4-way junctions with all turns
+          4-way junctions (left and right turns)
         </label>
         <label className="cb-check">
           <input
@@ -232,62 +229,71 @@ export function CityBlocks() {
           />
           Drive-through station in each block
         </label>
-        <p className="cb-note">
-          Blueprint: snap to grid {spec.pitch}x{spec.pitch}, absolute position, grid offset {spec.offset},{spec.offset}.
-          Inner area {spec.pitch - spec.corridor}x{spec.pitch - spec.corridor}.
-        </p>
-
-        <h3>Blueprint</h3>
-        {blueprint.ok ? (
-          <>
-            <div className="cb-pair">
-              <button onClick={() => copyBlueprint('cell')}>{copied === 'cell' ? 'Copied' : 'Copy blueprint string'}</button>
-              <button onClick={() => copyBlueprint('book')}>{copied === 'book' ? 'Copied' : 'Copy blueprint book'}</button>
-            </div>
-            <textarea className="cb-bp" readOnly value={blueprint.string} onFocus={(e) => e.target.select()} />
-            <p className="cb-note">
-              One {spec.pitch}x{spec.pitch} cell: {blueprint.entities.length} entities (dashed blue square on the map: the junction at its top-left corner,
-              the top and left tracks, and the block's buildings). It snaps to an absolute {spec.pitch}x{spec.pitch} grid;
-              paste it into every cell to build the network.
-            </p>
-            <p className="cb-note">
-              The book holds the whole cell, the rails and signals alone, and the substations and roboports alone. All
-              three snap to the same grid, so you can lay track first and power the blocks later.
-            </p>
-          </>
-        ) : (
-          <p className="cb-note">Can't export: {blueprint.error}</p>
-        )}
-
-        <h3>Train</h3>
         <div className="cb-pair">
           {num('locomotives', 1, 8)}
           {num('wagons', 0, 16)}
         </div>
 
-        <h3>Buildings in one block</h3>
-        <div className="cb-tools">
-          {TOOLS.map((t) => (
-            <button key={t.id} className={tool === t.id ? 'active' : ''} onClick={() => setTool(t.id)}>{t.label}</button>
-          ))}
+        <h3>2 · Use it</h3>
+        <div className="cb-use">
+          <label className="cb-field">
+            <span>Blocks to open</span>
+            <select value={editorBlocks} onChange={(e) => setEditorBlocks(Number(e.target.value))}>
+              {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}×{n}</option>)}
+            </select>
+          </label>
+          <button className="cb-primary" disabled={!onOpenInEditor || !problems.every((c) => c.status !== 'fail')} onClick={openInEditor}>
+            Open in the layout editor
+          </button>
+          <p className="cb-note">
+            Starts a new map with {editorBlocks}×{editorBlocks} blocks: track, signals{spec.station ? ', stations' : ''}, substations and roboports.
+            Build your factories inside the blocks there, then export everything as one blueprint. Undo brings your old map back.
+          </p>
+          {blueprint.ok ? (
+            <>
+              <div className="cb-pair">
+                <button onClick={() => copyBlueprint('book')}>{copied === 'book' ? 'Copied' : 'Copy blueprint book'}</button>
+                <button onClick={() => copyBlueprint('cell')}>{copied === 'cell' ? 'Copied' : 'Copy one cell'}</button>
+              </div>
+              <p className="cb-note">
+                In the game, paste the cell into every grid square: it snaps to an absolute {spec.pitch}×{spec.pitch} grid
+                (offset {spec.offset}). The book also has the track alone and the power and roboports alone.
+              </p>
+            </>
+          ) : (
+            <p className="cb-note">Can't export: {blueprint.error}</p>
+          )}
         </div>
-        <div className="cb-fill">
-          <label>Substations <input type="number" min={0} max={12} value={subN} onChange={(e) => setSubN(Number(e.target.value))} />²</label>
-          <label>Roboports <input type="number" min={0} max={6} value={roboN} onChange={(e) => setRoboN(Number(e.target.value))} />²</label>
-          <button onClick={() => set('buildings', avoidRails(spec, gridBuildings(spec, subN, roboN)))}>Fill the inner area evenly</button>
-          <button onClick={() => set('buildings', [])}>Clear</button>
-        </div>
-        <p className="cb-note">Click the map to place in every block at once; drag to pan, scroll to zoom.</p>
 
-        <h3>Show</h3>
-        <div className="cb-layers">
-          {LAYERS.map((l) => (
-            <label key={l.id} className="cb-check">
-              <input type="checkbox" checked={layers[l.id]} onChange={(e) => setLayers((s) => ({ ...s, [l.id]: e.target.checked }))} />
-              {l.label}
-            </label>
-          ))}
-        </div>
+        <details className="cb-advanced">
+          <summary>Advanced: grid, buildings and map layers</summary>
+          {num('pitch', 20, 256, 2)}
+          {num('offset', -64, 64)}
+          {num('corridor', 2, 64, 2)}
+          {num('trackSpacing', 2, 16, 2)}
+          <h4>Buildings in one block</h4>
+          <div className="cb-tools">
+            {TOOLS.map((t) => (
+              <button key={t.id} className={tool === t.id ? 'active' : ''} onClick={() => setTool(t.id)}>{t.label}</button>
+            ))}
+          </div>
+          <div className="cb-fill">
+            <label>Substations <input type="number" min={0} max={12} value={subN} onChange={(e) => setSubN(Number(e.target.value))} />²</label>
+            <label>Roboports <input type="number" min={0} max={6} value={roboN} onChange={(e) => setRoboN(Number(e.target.value))} />²</label>
+            <button onClick={() => set('buildings', avoidRails(spec, [...gridBuildings(spec, subN, roboN), ...corridorSubstations(spec)]))}>Fill the inner area evenly</button>
+            <button onClick={() => set('buildings', [])}>Clear</button>
+          </div>
+          <p className="cb-note">Click the map to place a building in every block at once; drag to pan, scroll to zoom.</p>
+          <h4>Show</h4>
+          <div className="cb-layers">
+            {LAYERS.map((l) => (
+              <label key={l.id} className="cb-check">
+                <input type="checkbox" checked={layers[l.id]} onChange={(e) => setLayers((s) => ({ ...s, [l.id]: e.target.checked }))} />
+                {l.label}
+              </label>
+            ))}
+          </div>
+        </details>
       </aside>
 
       <div className="cb-main">
@@ -355,21 +361,38 @@ export function CityBlocks() {
       </div>
 
       <aside className="cb-checks">
-        <h3>Checks for the middle block</h3>
-        {grouped.map(({ g, checks }) => checks.length > 0 && (
-          <section key={g}>
-            <h4>{g}</h4>
-            {checks.map((c) => (
-              <div key={c.id} className={`cb-c cb-c-${c.status}`}>
-                <span className="cb-c-icon">{STATUS_ICON[c.status]}</span>
-                <div>
-                  <div className="cb-c-title">{c.title}</div>
-                  {c.detail && <div className="cb-c-detail">{c.detail}</div>}
-                </div>
-              </div>
-            ))}
-          </section>
+        <h3>Checks</h3>
+        <p className={problems.length ? 'cb-verdict cb-verdict-bad' : 'cb-verdict'}>
+          {problems.length
+            ? `${problems.length} thing${problems.length === 1 ? '' : 's'} to fix`
+            : `All ${result.checks.filter((c) => c.status === 'pass').length} checks pass`}
+        </p>
+        {problems.map((c) => (
+          <div key={c.id} className={`cb-c cb-c-${c.status}`}>
+            <span className="cb-c-icon">{STATUS_ICON[c.status]}</span>
+            <div>
+              <div className="cb-c-title">{c.title}</div>
+              {c.detail && <div className="cb-c-detail">{c.detail}</div>}
+            </div>
+          </div>
         ))}
+        <details>
+          <summary>All checks</summary>
+          {grouped.map(({ g, checks }) => checks.length > 0 && (
+            <section key={g}>
+              <h4>{g}</h4>
+              {checks.map((c) => (
+                <div key={c.id} className={`cb-c cb-c-${c.status}`}>
+                  <span className="cb-c-icon">{STATUS_ICON[c.status]}</span>
+                  <div>
+                    <div className="cb-c-title">{c.title}</div>
+                    {c.detail && <div className="cb-c-detail">{c.detail}</div>}
+                  </div>
+                </div>
+              ))}
+            </section>
+          ))}
+        </details>
       </aside>
     </div>
   );

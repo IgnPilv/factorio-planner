@@ -67,6 +67,21 @@ export function gridBuildings(spec: Pick<BlockSpec, 'pitch' | 'corridor'>, subst
   return out;
 }
 
+/**
+ * Substations in the corridor, between the two tracks, halfway along the
+ * block's top and left edges. They link each block's power to its neighbours
+ * (the tracks keep the blocks' own poles more than a wire's reach apart).
+ * Needs at least 4 free tiles between the tracks (track spacing 6 or more).
+ */
+export function corridorSubstations(spec: Pick<BlockSpec, 'pitch' | 'trackSpacing'>): BlockSpec['buildings'] {
+  if (spec.trackSpacing < 6) return [];
+  const m = 2 * Math.round(spec.pitch / 4);
+  return [
+    { name: 'substation', x: 0, y: m },
+    { name: 'substation', x: m, y: 0 },
+  ];
+}
+
 export interface Design {
   spec: BlockSpec;
   /** The tiled area: [x0, x1) x [y0, y1). */
@@ -505,13 +520,24 @@ export function avoidRails(spec: BlockSpec, buildings: BlockSpec['buildings']): 
       for (let y = Math.floor(r.y0) - 1; y < r.y1 + 1; y++) if (occupied.has(`${x},${y}`)) return true;
     return false;
   };
-  const shifts: [number, number][] = [];
+  // Buildings also keep clear of each other (a centred roboport would sit on a centred substation).
+  const taken = new Set<string>();
+  const body = (b: { name: string; x: number; y: number }) => {
+    const r = bodyRect({ id: '', name: b.name, x: corner + b.x, y: corner + b.y });
+    const out: string[] = [];
+    for (let x = Math.floor(r.x0); x < r.x1; x++) for (let y = Math.floor(r.y0); y < r.y1; y++) out.push(`${x},${y}`);
+    return out;
+  };
+  const clear = (b: { name: string; x: number; y: number }) => !hits(b) && body(b).every((t) => !taken.has(t));
+  const shifts: [number, number][] = [[0, 0]];
   for (let s = 1; s <= 8; s++) shifts.push([s, 0], [-s, 0], [0, s], [0, -s]);
   return buildings.flatMap((b) => {
-    if (!hits(b)) return [b];
     for (const [dx, dy] of shifts) {
       const m = { ...b, x: b.x + dx, y: b.y + dy };
-      if (!hits(m)) return [m];
+      if (clear(m)) {
+        body(m).forEach((t) => taken.add(t));
+        return [m];
+      }
     }
     return [];
   });

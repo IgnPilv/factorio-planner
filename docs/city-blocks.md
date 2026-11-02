@@ -105,3 +105,16 @@ waiting train stays before the junction instead of inside it. The checks report
 whether the platform holds the train and whether the fork and merge stay clear of
 the corner junctions. Buildings that would sit on the new track are moved a few
 tiles aside.
+
+## Using it
+
+Pick one of the presets (Compact 66, Standard 100, Standard 100 with a station
+in every block, Large 150). Each passes every check above. **Open in the layout
+editor** starts a new map with 1×1 to 5×5 blocks at world coordinates: grid
+lines stay at k × pitch + offset, so what you build there lines up with the
+absolute-snapping cell blueprints in the game. Build factories inside the
+blocks and export the whole map, or copy the blueprint book for the empty grid.
+
+Every preset puts a substation in the corridor, between the two tracks,
+halfway along each block edge. The tracks keep each block's own poles more than
+a wire's reach apart, so without it every block is a separate electric network.

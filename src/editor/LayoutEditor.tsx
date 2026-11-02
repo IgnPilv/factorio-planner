@@ -116,14 +116,24 @@ function writePref(key: string, value: boolean) {
 const VIEW_LABELS: Record<ViewMode, string> = { normal: 'Normal', electric: 'Electric', logistics: 'Logistics' };
 const VIEW_ORDER: ViewMode[] = ['normal', 'electric', 'logistics'];
 
+/** A whole map handed to the editor from another view (city blocks). */
+export interface EditorIncoming {
+  layout: Layout;
+  note: string;
+  /** Changes every time, so the same map can be sent twice. */
+  seq: number;
+}
+
 export interface LayoutEditorProps {
   /** Called whenever the layout changes, so other panels can react. */
   onLayoutChange?: (layout: Layout) => void;
   /** Researched techs (from the research panel); changes machine rates and inserter hands. */
   research?: ResearchState;
+  /** Replace the map with this one (undoable). */
+  incoming?: EditorIncoming | null;
 }
 
-export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEditorProps) {
+export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL, incoming }: LayoutEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<GridRenderer | null>(null);
 
@@ -221,6 +231,27 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
   }, [layout, onLayoutChange]);
 
   useEffect(() => rendererRef.current?.setSelection(selection), [selection, layout]);
+
+  // A map sent from the City blocks view replaces this one; undo brings the old one back.
+  const lastIncoming = useRef(0);
+  useEffect(() => {
+    if (!incoming || incoming.seq === lastIncoming.current) return;
+    lastIncoming.current = incoming.seq;
+    apply(incoming.layout);
+    setSelection([]);
+    const xs = incoming.layout.rails?.map((r) => r.x) ?? [0];
+    const ys = incoming.layout.rails?.map((r) => r.y) ?? [0];
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const r = rendererRef.current;
+    // The editor was hidden while the other view was open: size the canvas again before centring.
+    requestAnimationFrame(() => {
+      if (!r?.canvas) return;
+      r.app.resize();
+      r.camera.zoom = 0.25;
+      r.centerOn(cx, cy);
+    });
+    setMessage(`Opened ${incoming.note}. Ctrl+Z goes back to your previous map.`);
+  }, [incoming, apply]);
   // ---- rates, power and views ---------------------------------------------
 
   const rates = useMemo(() => computeLayoutRates(layout, gameData, research), [layout, research]);
