@@ -305,7 +305,14 @@ interface MachineInfo {
   fluidOut: Map<string, number>;
   powerNet?: string;
   electric: boolean;
+  /** Electric consumers: drain in W, drawn even when the machine stands still. */
+  drainW: number;
   weight: number;
+}
+
+/** Electric draw of a machine at activity u: drain always, the rest in proportion. */
+function machinePowerW(m: MachineInfo, u: number): number {
+  return m.drainW + (m.rate.powerW - m.drainW) * u;
 }
 
 export function simulateLayout(
@@ -359,6 +366,7 @@ export function simulateLayout(
         fluidIn: new Map(),
         fluidOut: new Map(),
         electric: q.e.energySource === 'electric' && rate.powerW > 0,
+        drainW: q.e.energySource === 'electric' && rate.powerW > 0 ? Math.min(q.e.drain ?? 0, rate.powerW) : 0,
         weight: 1,
       });
       continue;
@@ -382,6 +390,7 @@ export function simulateLayout(
       fluidIn: new Map(),
       fluidOut: new Map(),
       electric: q.e.energySource === 'electric' && rate.powerW > 0,
+      drainW: q.e.energySource === 'electric' && rate.powerW > 0 ? Math.min(q.e.drain ?? 0, rate.powerW) : 0,
       weight: POWER_PLANT.has(kind) ? -1e-3 : kind === 'solar-panel' ? 1e-6 : 1,
     };
     const isFluid = (n: string) => data.items[n]?.type === 'fluid' || n === 'water' || n === 'steam';
@@ -722,18 +731,27 @@ export function simulateLayout(
     if (!l) inserterFlows.set(on.net, (l = []));
     l.push({ name: fv.name, j: on.link.jPerItem });
   }
+  // Drain: every powered electric consumer draws it, busy or not.
   const drainOf = new Map<string, number>();
-  for (const [net, links] of insertersOn) {
-    const w = links.reduce((a, l) => a + l.drainW, 0);
-    if (w <= 0) continue;
-    drainOf.set(net, w);
+  const addDrain = (net: string | undefined, w: number) => {
+    if (net && w > 0) drainOf.set(net, (drainOf.get(net) ?? 0) + w);
+  };
+  for (const [net, links] of insertersOn) for (const l of links) addDrain(net, l.drainW);
+  if (powerNets.modelled) {
+    for (const m of machines.values()) if (m.electric) addDrain(m.powerNet, m.drainW);
+    for (const id of idle.keys()) {
+      const q = byId.get(id);
+      if (q?.e.energySource === 'electric') addDrain(powerNets.netOf(q), q.e.drain ?? 0);
+    }
+  }
+  for (const [net, w] of drainOf) {
     const v: Record<string, number> = { obj: 1e-6 };
     coef(v, `pow:${net}`, -1);
     coef(v, `cap:drain:${net}`, 1);
     constraints[`cap:drain:${net}`] = { max: w };
     variables[`drain:${net}`] = v;
   }
-  /** Power the inserters on a network draw at these values, in W. */
+  /** Power the inserters on a network draw at these values, plus all drain there, in W. */
   const inserterDemand = (vals: Map<string, number>, net: string) => {
     let w = vals.get(`drain:${net}`) ?? 0;
     for (const f of inserterFlows.get(net) ?? []) w += (vals.get(f.name) ?? 0) * f.j;
@@ -786,7 +804,7 @@ export function simulateLayout(
     // Electricity.
     if (powerNets.modelled) {
       if (m.electric) {
-        if (m.powerNet) coef(v, `pow:${m.powerNet}`, -m.rate.powerW);
+        if (m.powerNet) coef(v, `pow:${m.powerNet}`, -(m.rate.powerW - m.drainW));
         else constraints[`u:${id}`] = { max: 0 };
       }
       if (m.rate.powerW < 0 && m.powerNet) coef(v, `pow:${m.powerNet}`, -m.rate.powerW);
@@ -886,7 +904,7 @@ export function simulateLayout(
       if (m.rate.powerW < 0) {
         supply += -m.rate.powerW * u;
         power.capacityW += -m.rate.powerW;
-      } else if (m.electric) demand += m.rate.powerW * u;
+      } else if (m.electric) demand += (m.rate.powerW - m.drainW) * u;
     }
     const ins = inserterDemand(values, net);
     demand += ins;
@@ -897,7 +915,9 @@ export function simulateLayout(
   for (const [id, m] of machines) {
     const u = Math.min(1, Math.max(0, val(`u:${id}`)));
     const scaled = scaleRate(m.rate, u);
-    if (m.electric) power.demandW += m.rate.powerW * u;
+    if (m.electric) scaled.powerW = powerNets.modelled && !m.powerNet ? 0 : machinePowerW(m, u);
+    if (m.electric && m.powerNet === undefined && !powerNets.modelled) power.demandW += machinePowerW(m, u);
+    else if (m.electric && m.powerNet) power.demandW += (m.rate.powerW - m.drainW) * u;
     let status: EntityStatus = 'working';
     let missing: string[] | undefined;
     if (u < 0.999) {
@@ -1125,7 +1145,7 @@ function evenPowerShares(
   const at = (vals: Map<string, number>, id: string) => vals.get(`u:${id}`) ?? 0;
   const consumersOf = (net: string) => [...machines.values()].filter((m) => m.electric && m.powerNet === net && m.rate.powerW > 0);
   const demand = (vals: Map<string, number>, net: string) =>
-    consumersOf(net).reduce((a, m) => a + m.rate.powerW * at(vals, m.q.p.id), 0) + inserterDemand(vals, net);
+    consumersOf(net).reduce((a, m) => a + (m.rate.powerW - m.drainW) * at(vals, m.q.p.id), 0) + inserterDemand(vals, net);
   const firstVals = new Map(first);
   const supply = new Map<string, number>();
   for (const net of nets) {
