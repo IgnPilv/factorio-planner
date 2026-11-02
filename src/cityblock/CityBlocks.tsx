@@ -5,7 +5,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { gameData } from '../data';
 import { centreLine, type RailPiece } from '../rails/geometry';
 import { signalPosition } from '../rails/signals';
-import { analyse, buildDesign, DEFAULT_SPEC, gridBuildings, type BlockSpec, type Status } from './block';
+import { trainStopEntity } from '../rails/blueprint';
+import { analyse, avoidRails, buildDesign, DEFAULT_SPEC, gridBuildings, type BlockSpec, type Status } from './block';
+import { blockBlueprint, blockBook } from './export';
 import { constructionRect, logisticsRect, supplyRect, type Rect } from './network';
 import './cityblock.css';
 
@@ -77,6 +79,25 @@ export function CityBlocks() {
 
   const design = useMemo(() => buildDesign(spec), [spec]);
   const result = useMemo(() => analyse(design), [design]);
+  const blueprint = useMemo(() => {
+    try {
+      const label = `City block ${spec.pitch}x${spec.pitch}`;
+      return { ok: true as const, ...blockBlueprint(design, label), book: blockBook(design, label) };
+    } catch (e) {
+      return { ok: false as const, error: String(e) };
+    }
+  }, [design, spec.pitch]);
+  const [copied, setCopied] = useState<'' | 'cell' | 'book'>('');
+  const copyBlueprint = async (what: 'cell' | 'book') => {
+    if (!blueprint.ok) return;
+    try {
+      await navigator.clipboard.writeText(what === 'book' ? blueprint.book : blueprint.string);
+      setCopied(what);
+      setTimeout(() => setCopied(''), 1500);
+    } catch {
+      setCopied('');
+    }
+  };
 
   const set = <K extends keyof BlockSpec>(k: K, v: BlockSpec[K]) => setSpec((s) => ({ ...s, [k]: v }));
   const num = (k: 'pitch' | 'offset' | 'trackSpacing' | 'corridor' | 'locomotives' | 'wagons', min: number, max: number, step = 1) => (
@@ -184,7 +205,7 @@ export function CityBlocks() {
             const s = { ...spec, ...p.spec };
             setSubN(p.substations);
             setRoboN(p.roboports);
-            setSpec({ ...s, buildings: gridBuildings(s, p.substations, p.roboports) });
+            setSpec({ ...s, buildings: avoidRails(s, gridBuildings(s, p.substations, p.roboports)) });
             e.target.value = '';
           }}
         >
@@ -201,10 +222,42 @@ export function CityBlocks() {
           <input type="checkbox" checked={spec.junctions} onChange={(e) => set('junctions', e.target.checked)} />
           4-way junctions with all turns
         </label>
+        <label className="cb-check">
+          <input
+            type="checkbox" checked={spec.station}
+            onChange={(e) => {
+              const next = { ...spec, station: e.target.checked };
+              setSpec({ ...next, buildings: avoidRails(next, next.buildings) });
+            }}
+          />
+          Drive-through station in each block
+        </label>
         <p className="cb-note">
           Blueprint: snap to grid {spec.pitch}x{spec.pitch}, absolute position, grid offset {spec.offset},{spec.offset}.
           Inner area {spec.pitch - spec.corridor}x{spec.pitch - spec.corridor}.
         </p>
+
+        <h3>Blueprint</h3>
+        {blueprint.ok ? (
+          <>
+            <div className="cb-pair">
+              <button onClick={() => copyBlueprint('cell')}>{copied === 'cell' ? 'Copied' : 'Copy blueprint string'}</button>
+              <button onClick={() => copyBlueprint('book')}>{copied === 'book' ? 'Copied' : 'Copy blueprint book'}</button>
+            </div>
+            <textarea className="cb-bp" readOnly value={blueprint.string} onFocus={(e) => e.target.select()} />
+            <p className="cb-note">
+              One {spec.pitch}x{spec.pitch} cell: {blueprint.entities.length} entities (dashed blue square on the map: the junction at its top-left corner,
+              the top and left tracks, and the block's buildings). It snaps to an absolute {spec.pitch}x{spec.pitch} grid;
+              paste it into every cell to build the network.
+            </p>
+            <p className="cb-note">
+              The book holds the whole cell, the rails and signals alone, and the substations and roboports alone. All
+              three snap to the same grid, so you can lay track first and power the blocks later.
+            </p>
+          </>
+        ) : (
+          <p className="cb-note">Can't export: {blueprint.error}</p>
+        )}
 
         <h3>Train</h3>
         <div className="cb-pair">
@@ -221,7 +274,7 @@ export function CityBlocks() {
         <div className="cb-fill">
           <label>Substations <input type="number" min={0} max={12} value={subN} onChange={(e) => setSubN(Number(e.target.value))} />²</label>
           <label>Roboports <input type="number" min={0} max={6} value={roboN} onChange={(e) => setRoboN(Number(e.target.value))} />²</label>
-          <button onClick={() => set('buildings', gridBuildings(spec, subN, roboN))}>Fill the inner area evenly</button>
+          <button onClick={() => set('buildings', avoidRails(spec, gridBuildings(spec, subN, roboN)))}>Fill the inner area evenly</button>
           <button onClick={() => set('buildings', [])}>Clear</button>
         </div>
         <p className="cb-note">Click the map to place in every block at once; drag to pan, scroll to zoom.</p>
@@ -278,6 +331,13 @@ export function CityBlocks() {
             return <circle key={s.id} className={s.kind === 'chain' ? 'cb-signal-chain' : 'cb-signal'} cx={p.x} cy={p.y} r={0.6} />;
           })}
           {layers.wires && result.wires.map(([a, b], i) => <line key={`w${i}`} className="cb-wire" x1={a.x} y1={a.y} x2={b.x} y2={b.y} />)}
+          {design.stops.map((st) => {
+            const e = trainStopEntity(st, st.dir);
+            return <rect key={`ts${st.block}`} className="cb-stop" x={e.position.x - 1} y={e.position.y - 1} width={2} height={2} />;
+          })}
+          {blueprint.ok && (
+            <rect className="cb-cell" x={blueprint.origin.x} y={blueprint.origin.y} width={spec.pitch} height={spec.pitch} />
+          )}
           {design.nodes.map((n) => {
             const e = gameData.entities[n.name];
             const w = e?.width ?? 1;

@@ -6,6 +6,7 @@ import { gameData, wikiIconUrl } from '../data';
 import { ENTITIES } from './catalog';
 import { formatWatts, type PowerReport, type PowerStatus } from './power';
 import { quickSearch, type SearchHit } from './search';
+import type { Unlocks } from './unlocks';
 import { displayNameOf, fmtRate, STATUS_COLORS, STATUS_LABELS } from './views';
 
 const YELLOW_BELT = 15; // items per second
@@ -143,11 +144,11 @@ export function MachineRates({ rate, status }: { rate?: EntityRate; status?: Pow
 }
 
 /** Search box over buildings, recipes and resources. "/" focuses it from anywhere in the editor. */
-export function QuickSearch({ onPick }: { onPick: (hit: SearchHit) => void }) {
+export function QuickSearch({ onPick, unlocks }: { onPick: (hit: SearchHit) => void; unlocks?: Unlocks }) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const input = useRef<HTMLInputElement>(null);
-  const hits = quickSearch(query);
+  const hits = quickSearch(query, 12, unlocks);
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
@@ -184,7 +185,7 @@ export function QuickSearch({ onPick }: { onPick: (hit: SearchHit) => void }) {
           } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             setActive((a) => Math.max(0, a - 1));
-          } else if (e.key === 'Enter' && hits[active]) {
+          } else if (e.key === 'Enter' && hits[active] && !hits[active].locked) {
             pick(hits[active]);
           } else if (e.key === 'Escape') {
             setQuery('');
@@ -197,10 +198,18 @@ export function QuickSearch({ onPick }: { onPick: (hit: SearchHit) => void }) {
           {hits.length === 0 && <li className="muted">No matches</li>}
           {hits.map((h, i) => (
             <li key={`${h.kind}:${h.building}:${h.recipe ?? ''}`}>
-              <button className={i === active ? 'active' : ''} onMouseEnter={() => setActive(i)} onClick={() => pick(h)}>
+              <button
+                className={`${i === active ? 'active' : ''}${h.locked ? ' locked' : ''}`}
+                disabled={h.locked}
+                title={h.locked ? 'Not researched yet (see Research)' : undefined}
+                onMouseEnter={() => setActive(i)}
+                onClick={() => pick(h)}
+              >
                 <img src={wikiIconUrl(h.label)} alt="" width={20} height={20} loading="lazy" onError={(e) => ((e.target as HTMLImageElement).style.visibility = 'hidden')} />
                 <span className="hit-label">{h.label}</span>
-                <span className="hit-kind">{h.kind === 'building' ? `${ENTITIES[h.building].width}×${ENTITIES[h.building].height}` : `in ${h.detail}`}</span>
+                <span className="hit-kind">
+                  {h.locked ? 'not researched' : h.kind === 'building' ? `${ENTITIES[h.building].width}×${ENTITIES[h.building].height}` : `in ${h.detail}`}
+                </span>
               </button>
             </li>
           ))}

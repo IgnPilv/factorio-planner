@@ -27,11 +27,15 @@ import {
   type PlacedEntity,
 } from './model';
 import { MachineSettings } from './MachineSettings';
+import { BlueprintDialog, type BlueprintDialogMode } from './BlueprintDialog';
+import { LibraryDialog } from './LibraryDialog';
+import { loadDesigns, saveDesigns, type Design } from '../blueprint/library';
 import { computeLayoutRates, simulateLayout, type ResearchState, type SteadyStateResult } from '../calc';
 import { gameData } from '../data';
 import { Bottlenecks, FlowState, MachineRates, SelectionFlows, PowerSummary, ProductionSummary, QuickSearch, SimSummary } from './Panels';
 import { analysePower, poleInfo } from './power';
 import { analyseRobots, isRoboportName, nodeOf, robotOverlay } from './robots';
+import { computeUnlocks, entityUnlocked, recipeUnlocked } from './unlocks';
 import type { SearchHit } from './search';
 import { buildBadges, buildViewOverlay, type ViewMode } from './views';
 import { GridRenderer } from './renderer';
@@ -118,6 +122,10 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
   const [view, setView] = useState<ViewMode>('normal');
   const [showWires, setShowWires] = useState(() => readPref('wires', true));
   const [showCoverage, setShowCoverage] = useState(() => readPref('coverage', false));
+  const [bpDialog, setBpDialog] = useState<BlueprintDialogMode | null>(null);
+  const [designs, setDesigns] = useState<Design[]>(() => loadDesigns());
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  useEffect(() => saveDesigns(designs), [designs]);
   useEffect(() => writePref('wires', showWires), [showWires]);
   useEffect(() => writePref('coverage', showCoverage), [showCoverage]);
   const [showRobots, setShowRobots] = useState(() => readPref('robots', true));
@@ -190,6 +198,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
   // ---- rates, power and views ---------------------------------------------
 
   const rates = useMemo(() => computeLayoutRates(layout, gameData, research), [layout, research]);
+  const unlocks = useMemo(() => computeUnlocks(research), [research]);
   const power = useMemo(() => analysePower(layout.entities, rates), [layout.entities, rates]);
   // The steady-state simulation is heavier (~0.2 s per 1,000 buildings), so run it after edits settle.
   const [sim, setSim] = useState<SteadyStateResult | null>(null);
@@ -271,6 +280,17 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
   }, [cursor, tool, direction, brush, occupancy, waterSet, layout, clip, box]);
 
   // ---- editing actions -----------------------------------------------------
+
+  /** Blueprint the selection, or the whole layout when nothing is selected. */
+  const openBlueprintExport = useCallback(() => {
+    const { layout: cur, selection: sel } = st.current;
+    const chosen = sel.length ? cur.entities.filter((e) => sel.includes(e.id)) : cur.entities;
+    if (!chosen.length) {
+      setMessage('Nothing to blueprint yet: place some buildings first.');
+      return;
+    }
+    setBpDialog({ kind: 'export', entities: chosen, scope: sel.length ? 'selection' : 'layout' });
+  }, []);
 
   const tryPlace = useCallback(
     (name: string, x: number, y: number, dir: Direction, commit: boolean): string | null => {
@@ -516,6 +536,9 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
         if (!st.current.clip) return;
         ev.preventDefault();
         setTool({ kind: 'paste' });
+      } else if ((ev.ctrlKey || ev.metaKey) && k === 'b') {
+        ev.preventDefault();
+        openBlueprintExport();
       } else if ((ev.ctrlKey || ev.metaKey) && k === 'a') {
         ev.preventDefault();
         setSelection(st.current.layout.entities.map((e) => e.id));
@@ -579,9 +602,30 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('keyup', onKey);
     };
-  }, [apply, redo, undo, removeAt, rotateHoveredOrSelected, tryPlace]);
+  }, [apply, redo, undo, removeAt, rotateHoveredOrSelected, tryPlace, openBlueprintExport]);
+
+  // Pasting a blueprint string anywhere outside a text field opens the import dialog.
+  useEffect(() => {
+    const onPaste = (ev: ClipboardEvent) => {
+      if ((ev.target as HTMLElement)?.closest?.('input, textarea, select')) return;
+      const text = ev.clipboardData?.getData('text')?.trim();
+      if (text && /^0eN[A-Za-z0-9+/=\s]+$/.test(text)) {
+        ev.preventDefault();
+        setBpDialog({ kind: 'import', initial: text });
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, []);
 
   // ---- file actions --------------------------------------------------------
+
+  const importBlueprint = (cb: Clipboard, note: string) => {
+    setClip(cb);
+    setTool({ kind: 'paste' });
+    setBpDialog(null);
+    setMessage(`Blueprint in hand: ${note}. Click to place, R to rotate.`);
+  };
 
   const fileInput = useRef<HTMLInputElement>(null);
   const exportJson = () => {
@@ -615,7 +659,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
   return (
     <div className="editor">
       <aside className="editor-palette">
-        <QuickSearch onPick={pickHit} />
+        <QuickSearch onPick={pickHit} unlocks={unlocks} />
         <div className="tool-row">
           <ToolButton active={tool.kind === 'select'} onClick={() => setTool({ kind: 'select' })} title="Select and pan (Esc)">Select</ToolButton>
           <ToolButton active={tool.kind === 'erase'} onClick={() => setTool({ kind: 'erase' })} title="Remove buildings (E, or right-click any time)">Remove</ToolButton>
@@ -641,12 +685,14 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
                 const def = ENTITIES[n];
                 if (!def) return null;
                 const active = tool.kind === 'build' && tool.name === n;
+                const locked = !entityUnlocked(unlocks, n);
                 return (
                   <button
                     key={n}
-                    className={`palette-item${active ? ' active' : ''}`}
+                    className={`palette-item${active ? ' active' : ''}${locked ? ' locked' : ''}`}
+                    disabled={locked && !active}
                     onClick={() => setTool(active ? { kind: 'select' } : { kind: 'build', name: n })}
-                    title={`${def.displayName} (${def.width}×${def.height})`}
+                    title={`${def.displayName} (${def.width}×${def.height})${locked ? ': not researched yet' : ''}`}
                   >
                     <span className="swatch" style={{ background: `#${entityColor(def).toString(16).padStart(6, '0')}` }}>
                       <img src={wikiIconUrl(def.displayName)} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
@@ -667,6 +713,16 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
           <span className="sep" />
           <button onClick={exportJson}>Export</button>
           <button onClick={() => fileInput.current?.click()}>Import</button>
+          <span className="sep" />
+          <button onClick={openBlueprintExport} title="Copy the selection (or the whole layout) as a Factorio blueprint string (Ctrl+B)">
+            {selection.length ? 'Blueprint selection' : 'Blueprint all'}
+          </button>
+          <button onClick={() => setBpDialog({ kind: 'import' })} title="Paste a blueprint string from Factorio (or just Ctrl+V it)">
+            Import blueprint
+          </button>
+          <button onClick={() => setLibraryOpen(true)} title="Saved designs and blueprint books">
+            Designs{designs.length ? ` (${designs.length})` : ''}
+          </button>
           <input ref={fileInput} type="file" accept="application/json,.json" hidden onChange={(e) => e.target.files?.[0] && importJson(e.target.files[0])} />
           <button
             onClick={() => {
@@ -736,7 +792,10 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
                 </>
               )}
             </dl>
-            <MachineSettings entity={sel} def={selDef} onChange={(patch) => apply(updateEntity(layout, sel.id, patch))} />
+            {(!entityUnlocked(unlocks, sel.name) || (sel.recipe && gameData.recipes[sel.recipe] && !recipeUnlocked(unlocks, sel.recipe))) && (
+              <p className="locked-note">Not researched yet with the current research settings.</p>
+            )}
+            <MachineSettings entity={sel} def={selDef} unlocks={unlocks} onChange={(patch) => apply(updateEntity(layout, sel.id, patch))} />
             <FlowState state={sim?.entities[sel.id]} transport={sim?.transport[sel.id]} />
             <MachineRates rate={rates[sel.id]} status={power.status[sel.id]} />
             <div className="tool-row">
@@ -766,6 +825,8 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
               >
                 Copy
               </button>
+              <button onClick={openBlueprintExport} title="Copy as a Factorio blueprint string (Ctrl+B)">Blueprint</button>
+              <button onClick={() => setLibraryOpen(true)} title="Save the selection as a named design">Save design</button>
               <button
                 onClick={() => {
                   apply(removeEntities(layout, selection));
@@ -789,6 +850,19 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
           </>
         )}
       </aside>
+      {bpDialog && <BlueprintDialog mode={bpDialog} onClose={() => setBpDialog(null)} onImport={importBlueprint} />}
+      {libraryOpen && (
+        <LibraryDialog
+          designs={designs}
+          onChange={setDesigns}
+          selection={layout.entities.filter((e) => selection.includes(e.id))}
+          onPlace={(cb, name) => {
+            setLibraryOpen(false);
+            importBlueprint(cb, `"${name}", ${cb.entities.length} buildings`);
+          }}
+          onClose={() => setLibraryOpen(false)}
+        />
+      )}
     </div>
   );
 }
