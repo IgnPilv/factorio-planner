@@ -230,6 +230,10 @@ export function CityBlocks({ onOpenInEditor }: CityBlocksProps) {
           />
           Drive-through station in each block
         </label>
+        <label className="cb-check" title="A balloon loop at the end of every corridor on the edge of the city, so trains can drive the whole network and turn round. Needs a track spacing of 6.">
+          <input type="checkbox" checked={!!spec.edgeLoops} disabled={spec.trackSpacing !== 6} onChange={(e) => set('edgeLoops', e.target.checked)} />
+          Turnaround loops at the city edge
+        </label>
         <label className="cb-check" title="Roboports near the block edges so their logistics zones touch across the rail corridors: bots can reach every block. Off: each block keeps its own network.">
           <input
             type="checkbox"

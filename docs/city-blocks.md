@@ -128,3 +128,11 @@ corridor (centres 16 apart there with a 12-wide corridor).
 In the editor the grid comes along: the **Blocks** toggle (B) draws the rail
 corridors, the track checks flag buildings standing in them, and blueprints can
 snap to the same absolute grid as the City blocks book.
+
+**Turnaround loops at the city edge** (track spacing 6) runs every corridor on
+past the outer junctions and closes it with a balloon loop: 45° right, one
+diagonal, 270° left, one diagonal, 45° right, which lands exactly on the other
+track. A loop reaches 34 tiles out and 13 to each side of the corridor centre,
+so loops at a corner stay clear of each other. The network then has no open
+ends and trains can drive all of it. The loops come with the map opened in the
+editor (export it with Blueprint all); the per-cell book doesn't include them.
