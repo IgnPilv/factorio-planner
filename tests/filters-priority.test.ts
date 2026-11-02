@@ -15,16 +15,25 @@ const e = (name: string, x: number, y: number, direction: Dir = 0, extra: Partia
 });
 const N = 0, E = 1, S = 2;
 
-/** A south-going belt at column x fed 2.5/s per row from supply chests on its west side. */
+/**
+ * A south-going belt at column x fed 5/s per row: fast inserters from supply
+ * chests on both sides, one per lane (inserters drop on the far lane).
+ */
 function feed(x: number, rows: number[], item: string): PlacedEntity[] {
-  return rows.flatMap((y) => [e('transport-belt', x, y, S), e('wooden-chest', x - 2, y, N, { recipe: item }), e('fast-inserter', x - 1, y, E)]);
+  return rows.flatMap((y) => [
+    e('transport-belt', x, y, S),
+    e('wooden-chest', x - 2, y, N, { recipe: item }),
+    e('fast-inserter', x - 1, y, E),
+    e('wooden-chest', x + 2, y, N, { recipe: item }),
+    e('fast-inserter', x + 1, y, 3 as Dir),
+  ]);
 }
 
 // A south-facing splitter on tiles x=1 and x=2. Facing south, x=2 is its left side.
 function splitterRig(split: Partial<PlacedEntity>, items: [string, string] = ['iron-plate', 'iron-plate'], blockLeft = false) {
   const ents: PlacedEntity[] = [
-    ...feed(1, [-4, -3], items[0]),
-    ...feed(1, [-2, -1], items[1]),
+    ...feed(1, [-2], items[0]),
+    ...feed(1, [-1], items[1]),
     e('splitter', 1, 0, S, { id: 'split', ...split }),
     e('transport-belt', 1, 1, S, { id: 'right' }),
     e('transport-belt', 1, 2, S),
@@ -78,11 +87,16 @@ describe('splitter input priority', () => {
   // is open, so 15/s gets through.
   const rig = (inputPriority?: 'left' | 'right') => {
     const ents: PlacedEntity[] = [
-      ...feed(1, [-4, -3, -2, -1], 'iron-plate').map((p) => (p.name === 'transport-belt' && p.y === -1 ? { ...p, id: 'inRight' } : p)),
-      ...feed(4, [-8, -7, -6, -5], 'iron-plate'),
+      ...feed(1, [-4, -3], 'iron-plate'),
+      e('transport-belt', 1, -2, S),
+      e('transport-belt', 1, -1, S, { id: 'inRight' }),
+      ...feed(5, [-8, -7], 'iron-plate'),
       // Bring the second line across to x=2, entering the splitter's left tile.
-      e('transport-belt', 4, -4, S),
-      e('transport-belt', 4, -3, S),
+      e('transport-belt', 5, -6, S),
+      e('transport-belt', 5, -5, S),
+      e('transport-belt', 5, -4, S),
+      e('transport-belt', 5, -3, S),
+      e('transport-belt', 5, -2, W),
       e('transport-belt', 4, -2, W),
       e('transport-belt', 3, -2, W),
       e('transport-belt', 2, -2, S),
@@ -140,8 +154,9 @@ describe('filter inserters', () => {
     expect(Object.keys(items(r, 'pick'))).toEqual(['iron-plate']);
   });
 
-  it('no filter moves both', () => {
+  it('no filter moves whatever is there, at full speed', () => {
     const r = rig({});
-    expect(Object.keys(items(r, 'pick')).sort()).toEqual(['copper-plate', 'iron-plate']);
+    expect(r.transport.pick!.utilization).toBeCloseTo(1);
+    expect(Object.keys(items(r, 'pick')).every((n) => n === 'copper-plate' || n === 'iron-plate')).toBe(true);
   });
 });

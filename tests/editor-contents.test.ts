@@ -21,12 +21,14 @@ describe('alt-mode contents', () => {
     expect(sim.chests?.dst.stored.map((f) => f.name)).toEqual(['iron-plate']);
     expect(sim.chests?.src.supplied.map((f) => f.name)).toEqual(['iron-plate']);
     const c = entityContents(ents, sim);
-    for (const id of ['src', 'i1', 'dst']) expect(c[id], id).toEqual(['iron-plate']);
-    for (const id of ['src2', 'i2', 'b1', 'b2']) expect(c[id], id).toEqual(['copper-plate']);
+    for (const id of ['src', 'i1', 'dst']) expect(c[id]?.items, id).toEqual(['iron-plate']);
+    for (const id of ['src2', 'i2', 'b1', 'b2']) expect(c[id]?.items, id).toEqual(['copper-plate']);
+    // The inserter north of an east-going belt drops on its far (right) lane.
+    for (const id of ['b1', 'b2']) expect(c[id]?.lanes, id).toEqual({ left: undefined, right: 'copper-plate' });
   });
 
   it('falls back to settings without a simulation', () => {
     const c = entityContents([...ents, { id: 'f', name: 'fast-inserter', x: 5, y: 5, direction: 0, filters: ['copper-plate'] }], null);
-    expect(c).toEqual({ src: ['iron-plate'], src2: ['copper-plate'], f: ['copper-plate'] });
+    expect(c).toEqual({ src: { items: ['iron-plate'] }, src2: { items: ['copper-plate'] }, f: { items: ['copper-plate'] } });
   });
 });

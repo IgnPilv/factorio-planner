@@ -27,10 +27,25 @@ and a linear program finds the most it can sustain: machines run at some
 fraction of full speed, items are conserved at every machine, belt tile,
 splitter and chest, and nothing moves faster than its limit.
 
-- **Belts**: each tile moves at most its throughput (15/s yellow). A belt
-  joining another from the side fills one lane only (half), unless it's a
-  plain curve. Belts ending in an empty tile are layout outputs; belts ending
-  against a building or head-on into another belt stop.
+- **Belts** have two lanes, each half the belt's throughput (7.5/s yellow);
+  lanes are named as seen facing the way the belt moves, and every belt tile,
+  underground and splitter is one node per lane.
+  - A curve keeps each lane. A belt joining another from the side (when the
+    target is also fed from behind, or from both sides) puts both its lanes
+    onto the target's lane on its side, limited to that one lane's speed.
+  - Side-loading an underground: only the half of the tile with belt on it
+    takes items, the tunnel half blocks them (wiki, Belt transport system), so
+    only the source lane over the open half gets through (the lane filter).
+  - Inserters drop on the far lane, or on the belt's right lane when the belt
+    runs toward or away from them (wiki, Inserters), and pick from either lane.
+  - Drills drop on the near lane of a belt across their front (from the
+    game's `vector_to_place_result`); along a belt the burner drill uses the
+    lane on its left and the electric drill (dead centre) is assumed to use the
+    belt's right lane.
+  - Splitters keep lanes and split each lane on its own.
+  - Reported belt utilization is the busier lane's share of a lane's speed.
+  Belts ending in an empty tile are layout outputs; belts ending against a
+  building or head-on into another belt stop.
 - **Undergrounds** pair up along a line (upstream = entrance) within their
   max distance. **Splitters** take from behind both halves and pass on through
   both fronts, half each way; the overflow goes to the other side only when
