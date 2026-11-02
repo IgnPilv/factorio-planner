@@ -12,7 +12,7 @@
     "extract-data": "node scripts/extract-data.mjs"
   },
   "dependencies": {
-    "fflate": "^0.8.3",
+    "fflate": "^0.8.2",
     "pixi.js": "^8.22.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

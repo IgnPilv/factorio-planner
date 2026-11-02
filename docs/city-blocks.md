@@ -53,3 +53,31 @@ unit tests check that a full circle of 8 A and 8 B pieces closes on itself.
 | Blueprint "snap to grid" with absolute position | Correct. Grid size = block pitch; the offset must keep rails on their parity. |
 | 1-tile gap between logistics zones isolates networks | Correct: squares that touch connect, so they must be at least 1 tile apart. |
 | 4-way vs T-junctions, stations inside the block | Design advice, not a mechanic. The checker reports junction block lengths and whether a station plus its radius-13 entry curve fits the inner side. |
+
+## Blueprint export
+
+The City blocks tab exports one grid cell as a blueprint string (snap to grid
+pitch x pitch, absolute snapping). The cell starts a junction's reach before the
+block's grid corner, so it holds that junction, the tracks on its top and left
+edges, and the block's buildings; every cell is identical, so pasting it into each
+cell builds the whole network.
+
+How 2.0 blueprints store rails was worked out from the blueprints in the game's
+own files (`base/prototypes/tips-and-tricks-simulations.lua`,
+`factoriopedia-simulations.lua`). With the tables in `src/rails/blueprint.ts`, all
+1,764 rail ends in those blueprints meet another rail end, apart from open ends at
+the edges, and the planner's 180° turn produces exactly the entities of the game's
+own loop:
+
+- `straight-rail` direction 0 runs north–south, 4 east–west, 2 NE–SW, 6 NW–SE.
+- `half-diagonal-rail` 0, 2, 4, 6 run along headings 15, 1, 3, 5 (22.5° steps).
+- `curved-rail-a` / `curved-rail-b`: direction 0 curves left leaving north, 2 curves
+  right; each +4 rotates 90° clockwise. Curve-A ends sit at (0, 2) and (∓1, −3) from
+  the entity position, curve-B ends at (∓2, −2) and (±1, 2).
+- Rail signals: 1.5 tiles right of the track and half a tile past the joint; the
+  blueprint direction is opposite to the direction trains travel.
+- Train stops: 2 tiles right of the track, direction = travel direction.
+
+Not yet confirmed in game: how `position-relative-to-grid` lines the cell up
+with the world grid. If a pasted cell lands off by a few tiles, the cell's contents
+are still right; only the grid offset needs adjusting.
