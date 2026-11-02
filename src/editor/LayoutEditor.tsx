@@ -754,6 +754,9 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL, incoming }
     setClip(cb);
     setTool({ kind: 'paste' });
     setBpDialog(null);
+    // Zoom out until the whole blueprint fits, and show it in the middle of the view right away.
+    const centre = rendererRef.current?.fitArea(cb.w, cb.h);
+    if (centre) setCursor(centre);
     setMessage(`Blueprint in hand: ${note}. Click to place, R to rotate.`);
   };
 

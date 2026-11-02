@@ -8,8 +8,11 @@ import {
   encodeJsonString,
   encodeVersion,
   makeBlueprint,
+  type BlueprintEntityInput,
 } from '../src/blueprint/format';
-import { blueprintToClipboard, layoutToBlueprint } from '../src/blueprint/layout';
+import { blueprintToClipboard, layoutToBlueprint, vanillaName } from '../src/blueprint/layout';
+import { railPiece } from '../src/editor/rails';
+import { checkRails } from '../src/rails/geometry';
 import { clipboardAt, emptyLayout, pasteClipboard, type PlacedEntity } from '../src/editor/model';
 
 // Real Factorio 2.0 blueprint strings, taken from the test suite of
@@ -337,8 +340,8 @@ describe('blueprints with rails', () => {
         { entity_number: 4, name: 'advanced-substation', position: { x: 20, y: 20 } },
       ],
     });
-    expect(clipboard!.entities.map((e) => e.name)).toEqual(['roboport']);
-    expect(unknown).toEqual({ 'curved-rail (1.x diagonal or curve)': 1, 'rail-signal': 1, 'advanced-substation': 1 });
+    expect(clipboard!.entities.map((e) => e.name)).toEqual(['roboport', 'substation']);
+    expect(unknown).toEqual({ '1.x curve or diagonal (could not rebuild)': 1, 'rail-signal': 1 });
   });
 
   it('converts 1.x straight rails along an axis and keeps their signals', () => {
@@ -376,6 +379,45 @@ describe('blueprints with rails', () => {
     expect(clipboard!.rails).toHaveLength(3);
     expect(clipboard!.rails!.map((r) => r.direction)).toEqual([0, 0, 4]);
     expect(clipboard!.entities.map((e) => e.name).sort()).toEqual(['rail-chain-signal', 'roboport']);
-    expect(unknown).toEqual({ 'curved-rail (1.x diagonal or curve)': 1 });
+    expect(unknown).toEqual({ '1.x curve or diagonal (could not rebuild)': 1 });
+  });
+
+  it('rebuilds a 1.x S-bend with 2.0 track that joins the straight track at both ends', () => {
+    // Two 1.x curves shifting the line 6 tiles sideways, with straight track before and after.
+    const entities: BlueprintEntityInput[] = [
+      { name: 'curved-rail', position: { x: 1, y: 1 }, direction: 0 },
+      { name: 'curved-rail', position: { x: -3, y: -5 }, direction: 4 },
+    ];
+    for (let i = 0; i < 10; i++) {
+      entities.push({ name: 'straight-rail', position: { x: 2, y: 6 + 2 * i } });
+      entities.push({ name: 'straight-rail', position: { x: -4, y: -10 - 2 * i } });
+    }
+    const { clipboard, unknown, railRoutes } = blueprintToClipboard({ item: 'blueprint', version: encodeVersion(1, 1, 110), entities: entities.map((e, i) => ({ ...e, entity_number: i + 1 })) });
+    expect(unknown).toEqual({});
+    expect(railRoutes).toMatchObject({ rebuilt: 1, failed: 0, legacyPieces: 2 });
+    const rails = clipboard!.rails!;
+    expect(rails.some((r) => r.name === 'curved-rail-a')).toBe(true);
+    const report = checkRails(rails.map((r, i) => railPiece({ ...r, id: `r${i}` })));
+    expect(report.issues).toEqual([]);
+    // Only the two far ends of the line are open: the new curves join the old straights.
+    expect(report.deadEnds).toHaveLength(2);
+  });
+
+  it('places modded buildings as their base-game counterparts', () => {
+    expect(vanillaName('substation-2')).toBe('substation');
+    expect(vanillaName('assembling-machine-4')).toBe('assembling-machine-3');
+    expect(vanillaName('logistic-train-stop')).toBe('train-stop');
+    expect(vanillaName('logistic-train-stop-input')).toBeNull();
+    expect(vanillaName('some-mod-thing')).toBeUndefined();
+    const { clipboard, replaced } = blueprintToClipboard({
+      item: 'blueprint',
+      version: encodeVersion(1, 1, 110),
+      entities: [
+        { entity_number: 1, name: 'substation-2', position: { x: 1, y: 1 } },
+        { entity_number: 2, name: 'logistic-train-stop-input', position: { x: 5.5, y: 5.5 } },
+      ],
+    });
+    expect(clipboard!.entities.map((e) => e.name)).toEqual(['substation']);
+    expect(replaced).toEqual({ 'substation-2 → substation': 1 });
   });
 });

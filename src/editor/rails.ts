@@ -220,7 +220,18 @@ export function planRail(start: RailEnd, tx: number, ty: number, maxExpand = 600
 const STEP: Record<number, [number, number]> = { 0: [0, -1], 4: [1, 0], 8: [0, 1], 12: [-1, 0] };
 
 /** Rail ends on straight north-south or east-west track, keyed "x,y|axis". */
+// Joint sets are rebuilt per call otherwise; layouts and imports never change a rails array in place.
+const jointCache = new WeakMap<object, { n: number; straight?: Set<string>; diagonal?: Set<string> }>();
+function cached(rails: readonly PlacedRail[], kind: 'straight' | 'diagonal', build: () => Set<string>): Set<string> {
+  let c = jointCache.get(rails);
+  if (!c || c.n !== rails.length) jointCache.set(rails, (c = { n: rails.length }));
+  return (c[kind] ??= build());
+}
+
 function straightJoints(rails: readonly PlacedRail[]): Set<string> {
+  return cached(rails, 'straight', () => buildStraightJoints(rails));
+}
+function buildStraightJoints(rails: readonly PlacedRail[]): Set<string> {
   const out = new Set<string>();
   for (const r of rails) {
     const p = railPiece(r);
@@ -251,6 +262,9 @@ export function signalDirectionAt(rails: readonly PlacedRail[], tx: number, ty: 
 
 /** Rail ends on 45° track, keyed "x,y|axis". */
 function diagonalJoints(rails: readonly PlacedRail[]): Set<string> {
+  return cached(rails, 'diagonal', () => buildDiagonalJoints(rails));
+}
+function buildDiagonalJoints(rails: readonly PlacedRail[]): Set<string> {
   const out = new Set<string>();
   for (const r of rails) {
     const p = railPiece(r);

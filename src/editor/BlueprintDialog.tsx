@@ -76,29 +76,54 @@ function ExportPane({ entities, rails, scope, onClose }: { entities: PlacedEntit
   );
 }
 
+interface ImportSummary {
+  clip: Clipboard;
+  note: string;
+  coming: string[];
+  converted: string[];
+  skipped: string[];
+  notes: string[];
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+function summarise(value: string): ImportSummary | string {
+  const { clipboard, unknown, replaced, railRoutes, label } = blueprintToClipboard(decodeBlueprintString(value));
+  const skipped = Object.entries(unknown).map(([n, c]) => `${c} × ${n}`);
+  const names = Object.keys(unknown);
+  const notes: string[] = [];
+  if (names.some((n) => /locomotive|wagon/.test(n))) notes.push('Trains are not placed: the planner lays out track, not rolling stock.');
+  if (names.some((n) => /beside 1\.x curve/.test(n))) notes.push('Signals and stops that stood beside 1.x curves were left out, since the curves were rebuilt in a different shape. Re-add junction signals where you need them.');
+  if (names.some((n) => /rail-ramp|rail-support|elevated/.test(n))) notes.push('Elevated rails are not supported.');
+  if (names.some((n) => !/\(|locomotive|wagon|rail/.test(n))) notes.push('Other skipped buildings are from mods, or not in the planner yet.');
+  if (!clipboard) return skipped.length ? `Nothing the planner knows in this blueprint (${skipped.join(', ')}). ${notes.join(' ')}` : 'This blueprint has no buildings.';
+  const counts = new Map<string, number>();
+  for (const e of clipboard.entities) {
+    const n = ENTITIES[e.name]?.displayName ?? e.name;
+    counts.set(n, (counts.get(n) ?? 0) + 1);
+  }
+  const coming = [...counts].sort((a, b) => b[1] - a[1]).map(([n, c]) => `${c} × ${n}`);
+  if (clipboard.rails?.length) coming.unshift(plural(clipboard.rails.length, 'rail piece'));
+  const converted = Object.entries(replaced).map(([n, c]) => `${c} × ${n}`);
+  if (railRoutes?.rebuilt)
+    converted.unshift(
+      `${plural(railRoutes.legacyPieces, '1.x curve or diagonal piece')} rebuilt as ${plural(railRoutes.rebuilt, 'route')} of 2.0 track. 2.0 curves are wider, so junctions and loops take a little more room.`,
+    );
+  const note = `${label ? `"${label}": ` : ''}${plural(clipboard.entities.length, 'building')}${clipboard.rails?.length ? `, ${clipboard.rails.length} rails` : ''}`;
+  return { clip: clipboard, note, coming, converted, skipped, notes };
+}
+
 function ImportPane({ initial, onClose, onImport }: { initial?: string; onClose: () => void; onImport: (clip: Clipboard, note: string) => void }) {
   const [value, setValue] = useState(initial ?? '');
   const [error, setError] = useState('');
-  const [pending, setPending] = useState<{ clip: Clipboard; note: string; skipped: string[]; railNote: string } | null>(null);
+  const [summary, setSummary] = useState<ImportSummary | null>(null);
   const run = () => {
     try {
-      const { clipboard, unknown, label } = blueprintToClipboard(decodeBlueprintString(value));
-      const missing = Object.entries(unknown).map(([n, c]) => `${c} × ${n}`);
-      const names = Object.keys(unknown);
-      const notes: string[] = [];
-      if (names.some((n) => /locomotive|wagon/.test(n))) notes.push('Trains are not placed: the planner lays out track, not rolling stock.');
-      if (names.some((n) => /\(1\.x|legacy-/.test(n))) notes.push('1.x diagonal and curved rails have no 2.0 equivalent (the game keeps them as legacy rails), so that track and its signals and stops were left out.');
-      if (names.some((n) => /rail-ramp|rail-support|elevated/.test(n))) notes.push('Elevated rails are not supported.');
-      const railNote = notes.length ? ' ' + notes.join(' ') : '';
-      if (!clipboard) {
-        setError(missing.length ? `Nothing the planner knows in this blueprint (${missing.join(', ')}).${railNote}` : 'This blueprint has no buildings.');
-        return;
-      }
-      const railCount = clipboard.rails?.length ?? 0;
-      const note = `${label ? `"${label}": ` : ''}${clipboard.entities.length} buildings${railCount ? `, ${railCount} rails` : ''}${missing.length ? `, skipped ${missing.join(', ')}` : ''}${railNote}`;
-      // Say what is missing before placing a partial blueprint.
-      if (missing.length) setPending({ clip: clipboard, note, skipped: missing, railNote });
-      else onImport(clipboard, note);
+      const s = summarise(value);
+      if (typeof s === 'string') setError(s);
+      // Place straight away when everything came through unchanged; otherwise say what happened first.
+      else if (!s.converted.length && !s.skipped.length) onImport(s.clip, s.note);
+      else setSummary(s);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -106,32 +131,49 @@ function ImportPane({ initial, onClose, onImport }: { initial?: string; onClose:
   return (
     <>
       <h3>Import blueprint</h3>
-      <p className="muted small">Paste a blueprint string from Factorio (or a book: its active blueprint is used). It goes into your hand to place.</p>
-      <textarea
-        className="bp-text"
-        autoFocus
-        value={value}
-        onChange={(e) => {
-          setValue(e.target.value);
-          setError('');
-          setPending(null);
-        }}
-        placeholder="0eNq..."
-      />
+      {!summary && (
+        <>
+          <p className="muted small">Paste a blueprint string from Factorio 1.x or 2.0 (or a book: its active blueprint is used). It goes into your hand to place.</p>
+          <textarea
+            className="bp-text"
+            autoFocus
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value);
+              setError('');
+            }}
+            placeholder="0eNq..."
+          />
+        </>
+      )}
       {error && <p className="small warn">{error}</p>}
-      {pending && (
-        <div className="small warn">
-          <p>
-            Only part of this blueprint can be placed: {pending.clip.entities.length} building{pending.clip.entities.length === 1 ? '' : 's'}. Skipped (not in the planner{pending.railNote ? '' : ', possibly from a mod'}): {pending.skipped.join(', ')}.
-            {pending.railNote}
-          </p>
+      {summary && (
+        <div className="bp-summary small">
+          <h4>Coming in</h4>
+          <ul>{summary.coming.map((c) => <li key={c}>{c}</li>)}</ul>
+          {summary.converted.length > 0 && (
+            <>
+              <h4>Converted</h4>
+              <ul>{summary.converted.map((c) => <li key={c}>{c}</li>)}</ul>
+            </>
+          )}
+          {summary.skipped.length > 0 && (
+            <>
+              <h4 className="warn">Left out</h4>
+              <ul>{summary.skipped.map((c) => <li key={c}>{c}</li>)}</ul>
+            </>
+          )}
+          {summary.notes.map((n) => <p key={n} className="muted">{n}</p>)}
         </div>
       )}
       <div className="tool-row">
-        {pending ? (
-          <button className="primary" onClick={() => onImport(pending.clip, pending.note)}>
-            Place {pending.clip.entities.length} building{pending.clip.entities.length === 1 ? '' : 's'} anyway
-          </button>
+        {summary ? (
+          <>
+            <button className="primary" autoFocus onClick={() => onImport(summary.clip, summary.note)}>
+              Place it
+            </button>
+            <button onClick={() => setSummary(null)}>Back</button>
+          </>
         ) : (
           <button className="primary" onClick={run} disabled={!value.trim()}>
             Import
