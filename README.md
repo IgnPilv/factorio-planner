@@ -8,6 +8,9 @@ Game data comes from Wube's official prototype files
 ([wube/factorio-data](https://github.com/wube/factorio-data)), the same source the
 [Factorio wiki](https://wiki.factorio.com) infoboxes are built from.
 
+Live site: https://ignpilv.github.io/factorio-planner/ (main). Every pull request also gets a
+preview at `https://ignpilv.github.io/factorio-planner/pr-preview/pr-<number>/`, linked in a PR comment.
+
 ## Develop
 
 ```sh
