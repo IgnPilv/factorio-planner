@@ -12,6 +12,7 @@ import { solve, type Coefficients, type Constraint } from 'yalps';
 import type { Entity, GameData } from '../data/types';
 import { sumFlows, type Flow } from './flow';
 import { beaconsByEntity, type PlacedEntity } from './layout';
+import { beltToChest, chestToBelt } from './inserter-belt';
 import { ELECTRICITY, machineRate, type EntityRate } from './machine';
 import { researchBonuses, type ResearchBonuses, type ResearchState } from './research';
 
@@ -122,6 +123,23 @@ export const PIPELINE_MAX_EXTENT = 250;
 export function inserterHandSize(entity: Entity, bonuses?: ResearchBonuses): number {
   const bonus = entity.bulk ? bonuses?.bulkInserterBonus ?? 0 : bonuses?.inserterStackBonus ?? 0;
   return 1 + bonus;
+}
+
+/**
+ * Items/s for an inserter between these two things. Chest-to-chest uses the
+ * arm-cycle formula; with a belt on either side the wiki's measurements are
+ * used (see inserter-belt.ts: dropping on a belt is measured 2.0 data, taking
+ * from a belt is derived from 1.1 data).
+ */
+export function inserterCapacity(inserter: Entity, bonuses: ResearchBonuses | undefined, from?: { e: Entity }, to?: { e: Entity }): number {
+  const chest = inserterThroughput(inserter, bonuses);
+  const hand = inserterHandSize(inserter, bonuses);
+  const cycles = chest / hand;
+  let cap = chest;
+  // Taking from a belt can beat chest-to-chest (the arm homes in on items), so no min here.
+  if (from && BELTS.has(from.e.kind)) cap = beltToChest(inserter, hand, from.e, cycles) ?? chest;
+  if (to && BELTS.has(to.e.kind)) cap = Math.min(cap, chestToBelt(inserter, hand, to.e) ?? chest);
+  return cap;
 }
 
 /** Reach in tiles from the inserter to its pickup and drop tiles. */
@@ -416,10 +434,10 @@ export function simulateLayout(
   for (const q of placed) {
     if (q.e.kind !== 'inserter') continue;
     const reach = inserterReach(q.e);
-    const capacity = inserterThroughput(q.e, bonuses);
-    transport[q.p.id] = blankTransport('inserter', capacity);
     const pick = nodeAt(q.x - DX[q.d] * reach, q.y - DY[q.d] * reach);
     const drop = nodeAt(q.x + DX[q.d] * reach, q.y + DY[q.d] * reach);
+    const capacity = inserterCapacity(q.e, bonuses, pick?.q, drop?.q);
+    transport[q.p.id] = blankTransport('inserter', capacity);
     if (!pick || !drop) continue;
     const capRow = `cap:${q.p.id}`;
     capacities.set(capRow, capacity);

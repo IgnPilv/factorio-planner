@@ -40,9 +40,12 @@ splitter and chest, and nothing moves faster than its limit.
   for long-handed), only items the target machine needs, at hand × 60 /
   ticks per turn, where ticks per turn = 1 / rotation speed truncated and
   rounded down to even: the 2.0 wiki's 76/70/48/24 ticks and 0.79, 0.86,
-  1.25, 2.5 items/s. Capacity research adds to the hand. With a bigger hand,
-  taking from or dropping onto a belt is somewhat slower in game; not
-  modelled yet.
+  1.25, 2.5 items/s. Capacity research adds to the hand. With a belt on
+  either side, `inserter-belt.ts` uses the wiki's measurements instead:
+  dropping on a belt uses the 2.0 chest-to-belt table as measured; taking
+  from a belt is **derived** from the wiki's 1.1 belt-to-chest table, scaled
+  by how much faster each inserter's arm cycles in 2.0. Hand sizes between
+  measured points are interpolated.
 - **Drills** drop onto the tile beyond the middle of their front edge
   (belt, machine or chest). Burner machines need fuel (coal by default)
   inserted like any other input.

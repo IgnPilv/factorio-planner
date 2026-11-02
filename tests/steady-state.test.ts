@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { gameData as data } from '../src/data';
 import {
   allResearched,
+  inserterCapacity,
   inserterThroughput,
   inserterTicksPerTurn,
   researchBonuses,
@@ -45,6 +46,28 @@ describe('inserter throughput (wiki chest-to-chest figures)', () => {
     expect(t('bulk-inserter', allResearched(data))).toBeCloseTo(12 * 2.5, 2);
     // Ordinary inserters get +2 from capacity bonus 2 and 7.
     expect(t('fast-inserter', allResearched(data))).toBeCloseTo(3 * 2.5, 2);
+  });
+});
+
+describe('inserters and belts (wiki measurements)', () => {
+  const ent = (n: string) => data.entities[n]!;
+  const bonus = (research = {}) => researchBonuses(data, research);
+  it('dropping on a belt uses the 2.0 chest-to-belt figures', () => {
+    expect(inserterCapacity(ent('fast-inserter'), bonus(), { e: ent('wooden-chest') }, { e: ent('transport-belt') })).toBeCloseTo(2.5);
+    // Bulk inserter, all capacity research (hand 12): 6.93 on yellow, 14.4 on blue.
+    const all = bonus(allResearched(data));
+    expect(inserterCapacity(ent('bulk-inserter'), all, { e: ent('wooden-chest') }, { e: ent('transport-belt') })).toBeCloseTo(6.93);
+    expect(inserterCapacity(ent('bulk-inserter'), all, { e: ent('wooden-chest') }, { e: ent('express-transport-belt') })).toBeCloseTo(14.4);
+  });
+  it('taking from a belt scales the 1.1 measurements to 2.0 arm speed (derived)', () => {
+    const c = inserterCapacity(ent('inserter'), bonus(), { e: ent('transport-belt') }, { e: ent('wooden-chest') });
+    expect(c).toBeCloseTo((0.94 * 60) / 70 / 0.83, 3);
+    // Bulk inserter with hand 12 on a yellow belt is held to about one lane's worth.
+    const b = inserterCapacity(ent('bulk-inserter'), bonus(allResearched(data)), { e: ent('transport-belt') }, { e: ent('wooden-chest') });
+    expect(b).toBeCloseTo((7.5 * 2.5) / 2.31, 2);
+  });
+  it('chest to chest is untouched', () => {
+    expect(inserterCapacity(ent('fast-inserter'), bonus(), { e: ent('wooden-chest') }, { e: ent('assembling-machine-2') })).toBeCloseTo(2.5);
   });
 });
 
