@@ -14,8 +14,8 @@
 
 import { gameData } from '../data';
 import { ENTITIES } from '../editor/catalog';
-import { footprint, groupBounds, type Clipboard, type Direction, type PlacedEntity } from '../editor/model';
-import { isRailName, RAIL_ITEM, railValid, signalAt, trainStopAt, type PlacedRail } from '../editor/rails';
+import { footprint, groupBounds, type BlockGrid, type Clipboard, type Direction, type PlacedEntity } from '../editor/model';
+import { evenFloor, isRailName, RAIL_ITEM, railValid, signalAt, trainStopAt, type PlacedRail } from '../editor/rails';
 import { convertLegacyRails, legacyEnds } from './legacyRails';
 import { poleInfo } from '../editor/power';
 import {
@@ -40,6 +40,11 @@ export interface ExportOptions {
   label?: string;
   /** Rail track to include (signals and train stops are among the entities). */
   rails?: readonly PlacedRail[];
+  /**
+   * Snap the blueprint to this city-block grid with absolute positioning, so in
+   * the game it lands on the same grid cell as in the editor.
+   */
+  grid?: BlockGrid;
 }
 
 export interface ExportResult {
@@ -57,7 +62,12 @@ export function layoutToBlueprint(entities: readonly PlacedEntity[], opts: Expor
   const rails = opts.rails ?? [];
   // Shift so the blueprint sits near the origin; the game re-centres anyway.
   // With rails the shift is even, so rail ends stay on the rail grid.
-  const b = groupBounds(known, rails);
+  const bounds = groupBounds(known, rails);
+  // On a block grid, positions count from the grid corner of the cell the group
+  // starts in (made even for the rails), and the game snaps to that grid.
+  const g = opts.grid;
+  const corner = (v: number) => (g ? evenFloor(Math.floor((v - g.offset) / g.pitch) * g.pitch + g.offset) : v);
+  const b = { x: corner(bounds.x), y: corner(bounds.y) };
 
   const out: BlueprintEntityInput[] = known.map((e) => {
     const def = ENTITIES[e.name]!;
@@ -90,6 +100,11 @@ export function layoutToBlueprint(entities: readonly PlacedEntity[], opts: Expor
       label: opts.label,
       wires: poleWires(known),
       itemOf: (n) => (isRailName(n) ? RAIL_ITEM : (ENTITIES[n]?.item ?? n)),
+      ...(g && {
+        snapToGrid: { x: g.pitch, y: g.pitch },
+        absoluteSnapping: true,
+        positionRelativeToGrid: { x: ((b.x % g.pitch) + g.pitch) % g.pitch, y: ((b.y % g.pitch) + g.pitch) % g.pitch },
+      }),
     }),
     skipped: entities.length - known.length,
   };

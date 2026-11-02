@@ -5,10 +5,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { decodeBlueprintString, encodeBlueprintString } from '../blueprint/format';
 import { blueprintToClipboard, layoutToBlueprint } from '../blueprint/layout';
 import { ENTITIES } from './catalog';
-import type { Clipboard, PlacedEntity, PlacedRail } from './model';
+import type { BlockGrid, Clipboard, PlacedEntity, PlacedRail } from './model';
 
 export type BlueprintDialogMode =
-  | { kind: 'export'; entities: PlacedEntity[]; rails?: PlacedRail[]; scope: 'selection' | 'layout' }
+  | { kind: 'export'; entities: PlacedEntity[]; rails?: PlacedRail[]; scope: 'selection' | 'layout'; grid?: BlockGrid }
   | { kind: 'import'; initial?: string };
 
 export function BlueprintDialog({ mode, onClose, onImport }: { mode: BlueprintDialogMode; onClose: () => void; onImport: (clip: Clipboard, note: string) => void }) {
@@ -21,20 +21,22 @@ export function BlueprintDialog({ mode, onClose, onImport }: { mode: BlueprintDi
   return (
     <div className="bp-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="bp-dialog" role="dialog" aria-modal="true">
-        {mode.kind === 'export' ? <ExportPane entities={mode.entities} rails={mode.rails ?? []} scope={mode.scope} onClose={onClose} /> : <ImportPane initial={mode.initial} onClose={onClose} onImport={onImport} />}
+        {mode.kind === 'export' ? <ExportPane entities={mode.entities} rails={mode.rails ?? []} scope={mode.scope} grid={mode.grid} onClose={onClose} /> : <ImportPane initial={mode.initial} onClose={onClose} onImport={onImport} />}
       </div>
     </div>
   );
 }
 
-function ExportPane({ entities, rails, scope, onClose }: { entities: PlacedEntity[]; rails: PlacedRail[]; scope: 'selection' | 'layout'; onClose: () => void }) {
+function ExportPane({ entities, rails, scope, grid, onClose }: { entities: PlacedEntity[]; rails: PlacedRail[]; scope: 'selection' | 'layout'; grid?: BlockGrid; onClose: () => void }) {
   const [label, setLabel] = useState('');
+  const [snap, setSnap] = useState(true);
+  const useGrid = grid && snap ? grid : undefined;
   const [copied, setCopied] = useState<'' | 'ok' | 'failed'>('');
   const text = useRef<HTMLTextAreaElement>(null);
   const { str, wires, skipped } = useMemo(() => {
-    const { blueprint, skipped } = layoutToBlueprint(entities, { label: label.trim() || undefined, rails });
+    const { blueprint, skipped } = layoutToBlueprint(entities, { label: label.trim() || undefined, rails, grid: useGrid });
     return { str: encodeBlueprintString(blueprint), wires: blueprint.wires?.length ?? 0, skipped };
-  }, [entities, rails, label]);
+  }, [entities, rails, label, useGrid]);
   useEffect(() => setCopied(''), [str]);
 
   const drillsWithoutNote = entities.filter((e) => ENTITIES[e.name]?.kind === 'mining-drill').length;
@@ -60,6 +62,16 @@ function ExportPane({ entities, rails, scope, onClose }: { entities: PlacedEntit
       <label className="bp-label">
         Name <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Blueprint name (optional)" maxLength={200} />
       </label>
+      {grid && (
+        <label className="bp-label" title="The blueprint snaps to the city-block grid in the game, so it lands in the same place relative to the grid as here">
+          <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Snap to the {grid.pitch}×{grid.pitch} block grid (absolute)
+        </label>
+      )}
+      {useGrid && (
+        <p className="muted small">
+          In the game this snaps to the same world grid as the City blocks book, so it lands in the same spot within its block as it sits here.
+        </p>
+      )}
       <textarea ref={text} className="bp-text" readOnly value={str} onFocus={(e) => e.currentTarget.select()} />
       <div className="tool-row">
         <button className="primary" onClick={copy} autoFocus>

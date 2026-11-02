@@ -26,5 +26,11 @@ export function designToLayout(d: Design): Layout {
     if (!def) continue;
     entities.push({ id: newId(), name: n.name, x: Math.round(n.x - def.width / 2), y: Math.round(n.y - def.height / 2), direction: 0 });
   }
-  return { version: 1, entities, water: [], rails: d.pieces.map((p) => railFromPiece(p, newId())) };
+  return {
+    version: 1,
+    entities,
+    water: [],
+    rails: d.pieces.map((p) => railFromPiece(p, newId())),
+    blockGrid: { pitch: d.spec.pitch, offset: d.spec.offset, corridor: d.spec.corridor },
+  };
 }

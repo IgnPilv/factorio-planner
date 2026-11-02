@@ -17,6 +17,7 @@ const COLORS = {
   grassAlt: 0x36442c,
   gridMinor: 0x000000,
   gridMajor: 0x000000,
+  block: 0x6fb7ff,
   water: 0x1d4f7c,
   shore: 0x6a9fc4,
   selection: 0xffd34d,
@@ -76,6 +77,7 @@ export class GridRenderer {
   private ghostLayer = new Container();
   private ready = false;
   private destroyed = false;
+  private showBlocks = true;
 
   camera: Camera = { x: -400, y: -300, zoom: 1 };
   private layout: Layout = { version: 1, entities: [], water: [] };
@@ -164,13 +166,21 @@ export class GridRenderer {
     const waterChanged = layout.water !== this.layout.water;
     const entitiesChanged = layout.entities !== this.layout.entities;
     const railsChanged = layout.rails !== this.layout.rails;
+    const gridChanged = layout.blockGrid !== this.layout.blockGrid;
     this.layout = layout;
     if (!this.ready) return;
+    if (gridChanged) this.drawView();
     if (waterChanged) this.drawWater();
     if (railsChanged) this.drawRails();
     if (entitiesChanged) this.drawEntities();
     this.drawOverlay();
     this.drawViewOverlay();
+  }
+
+  /** Show or hide the layout's city-block grid. */
+  setShowBlocks(on: boolean) {
+    this.showBlocks = on;
+    if (this.ready) this.drawView();
   }
 
   setSelection(ids: Iterable<string>) {
@@ -269,6 +279,21 @@ export class GridRenderer {
     for (let tx = Math.ceil(x0 / C) * C; tx <= x1; tx += C) grid.moveTo(tx * TILE, y0 * TILE).lineTo(tx * TILE, y1 * TILE);
     for (let ty = Math.ceil(y0 / C) * C; ty <= y1; ty += C) grid.moveTo(x0 * TILE, ty * TILE).lineTo(x1 * TILE, ty * TILE);
     grid.stroke({ width: px * 1.5, color: COLORS.gridMajor, alpha: 0.35 });
+
+    // City-block grid: a faint band for each rail corridor and a line on its centre.
+    const bg = this.layout.blockGrid;
+    if (bg && this.showBlocks) {
+      const { pitch: P, offset: o, corridor: w } = bg;
+      const first = (v: number) => Math.ceil((v - o - w) / P) * P + o;
+      if (w > 0) {
+        for (let gx = first(x0); gx - w / 2 <= x1; gx += P) grid.rect((gx - w / 2) * TILE, y0 * TILE, w * TILE, (y1 - y0) * TILE);
+        for (let gy = first(y0); gy - w / 2 <= y1; gy += P) grid.rect(x0 * TILE, (gy - w / 2) * TILE, (x1 - x0) * TILE, w * TILE);
+        grid.fill({ color: COLORS.block, alpha: 0.06 });
+      }
+      for (let gx = first(x0); gx <= x1; gx += P) grid.moveTo(gx * TILE, y0 * TILE).lineTo(gx * TILE, y1 * TILE);
+      for (let gy = first(y0); gy <= y1; gy += P) grid.moveTo(x0 * TILE, gy * TILE).lineTo(x1 * TILE, gy * TILE);
+      grid.stroke({ width: Math.max(px * 2, 3), color: COLORS.block, alpha: 0.5 });
+    }
 
     if (this.view.lines?.length || this.view.dots?.length || this.view.areas?.some((a) => a.outline)) this.drawViewOverlay();
     // Labels are hidden when zoomed far out, where they would be unreadable.
