@@ -75,6 +75,8 @@ export interface SteadyStateResult {
   outputs: Flow[];
   /** Items taken from supply chests. */
   inputs: Flow[];
+  /** Per chest: items put in (stored) and items taken out of a supply chest. Absent on a failed solve. */
+  chests?: Record<string, { stored: Flow[]; supplied: Flow[] }>;
   power: PowerState;
   warnings: string[];
 }
@@ -767,10 +769,22 @@ export function simulateLayout(
   for (const node of sinks) for (const item of reach.get(node) ?? []) outputs.push({ name: item, perSecond: val(`absorb:${node}:${item}`) });
   for (const [node, item] of supplies) inputs.push({ name: item, perSecond: val(`supply:${node}`) });
 
+  const chests: Record<string, { stored: Flow[]; supplied: Flow[] }> = {};
+  for (const q of placed) {
+    if (q.e.kind !== 'chest') continue;
+    const node = `c:${q.p.id}`;
+    const item = supplies.get(node);
+    chests[q.p.id] = {
+      stored: sumFlows([...(reach.get(node) ?? [])].map((i) => ({ name: i, perSecond: val(`absorb:${node}:${i}`) })), 1e-7),
+      supplied: item ? sumFlows([{ name: item, perSecond: val(`supply:${node}`) }], 1e-7) : [],
+    };
+  }
+
   return {
     ok: true,
     entities,
     transport,
+    chests,
     outputs: sumFlows(outputs, 1e-7),
     inputs: sumFlows(inputs, 1e-7),
     power,
