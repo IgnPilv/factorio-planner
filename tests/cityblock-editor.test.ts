@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { layoutToBlueprint } from '../src/blueprint/layout';
+import type { Blueprint } from '../src/blueprint/format';
+import { blockBlueprint } from '../src/cityblock/export';
 import { analyse, buildDesign } from '../src/cityblock/block';
 import { PRESETS, presetSpec } from '../src/cityblock/presets';
 import { designToLayout } from '../src/cityblock/toEditor';
@@ -60,5 +63,29 @@ describe('block grid in the editor', () => {
     expect(inCorridor(layout.blockGrid!, 6, 50)).toBe(false);
     expect(inCorridor(layout.blockGrid!, -6, 50)).toBe(true);
     expect(inCorridor(layout.blockGrid!, -7, 50)).toBe(false);
+  });
+});
+
+describe('blueprints snapped to the block grid', () => {
+  it('editor export and the City blocks cell use the same absolute grid', () => {
+    const p = PRESETS[1]!;
+    const d = buildDesign(presetSpec(p));
+    const layout = designToLayout(d);
+    const P = layout.blockGrid!.pitch;
+    const mod = (v: number) => ((v % P) + P) % P;
+    const worldRail = new Set(layout.rails!.map((r) => `${r.name}|${mod(r.x)}|${mod(r.y)}|${r.direction}`));
+    const check = (bp: Blueprint) => {
+      expect(bp['absolute-snapping']).toBe(true);
+      expect(bp['snap-to-grid']).toEqual({ x: P, y: P });
+      const rel = bp['position-relative-to-grid'] ?? { x: 0, y: 0 };
+      const rails = bp.entities!.filter((e) => e.name === 'straight-rail');
+      expect(rails.length).toBeGreaterThan(0);
+      for (const e of rails) expect(worldRail.has(`${e.name}|${mod(e.position.x + rel.x)}|${mod(e.position.y + rel.y)}|${e.direction ?? 0}`)).toBe(true);
+    };
+    // One block's worth of track, picked in the editor.
+    const cell = layout.rails!.filter((r) => r.x >= 100 && r.x < 200 && r.y >= 100 && r.y < 200);
+    const { blueprint } = layoutToBlueprint([], { rails: cell, grid: layout.blockGrid });
+    check(blueprint);
+    check(blockBlueprint(d).json.blueprint);
   });
 });

@@ -381,7 +381,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL, incoming }
       setMessage('Nothing to blueprint yet: place some buildings first.');
       return;
     }
-    setBpDialog({ kind: 'export', entities: chosen, rails, scope: sel.length ? 'selection' : 'layout' });
+    setBpDialog({ kind: 'export', entities: chosen, rails, scope: sel.length ? 'selection' : 'layout', grid: cur.blockGrid });
   }, []);
 
   const tryPlace = useCallback(
