@@ -80,16 +80,20 @@ describe('simulateLayout', () => {
     expect(r.entities.drill!.status).toBe('working');
     expect(flow(r.outputs, 'iron-ore')).toBeCloseTo(0.5);
     expect(r.transport.b5!.perSecond).toBeCloseTo(0.5);
-    expect(r.transport.b5!.utilization).toBeCloseTo(0.5 / 15);
+    // All on one lane (7.5/s on yellow).
+    expect(r.transport.b5!.utilization).toBeCloseTo(0.5 / 7.5);
     expect(r.power.modelled).toBe(false);
   });
 
   it('caps a yellow belt at 15 items/s', () => {
     const ents: PlacedEntity[] = [];
+    // Fast inserters on both sides, so both lanes fill (each drops on its far lane).
     for (let x = 0; x < 12; x++) {
       ents.push(e('transport-belt', x, 0, E, { id: `belt${x}` }));
       ents.push(e('wooden-chest', x, -2, N, { recipe: 'iron-plate' }));
       ents.push(e('fast-inserter', x, -1, S));
+      ents.push(e('wooden-chest', x, 2, N, { recipe: 'iron-plate' }));
+      ents.push(e('fast-inserter', x, 1, N));
     }
     const r = simulateLayout({ entities: ents }, data);
     expect(flow(r.outputs, 'iron-plate')).toBeCloseTo(15);
@@ -98,11 +102,13 @@ describe('simulateLayout', () => {
 
   it('side-loading fills only one lane (7.5/s on yellow)', () => {
     const ents: PlacedEntity[] = [];
-    // A side belt running south into a west-east main belt, fed by 8 fast inserters (18.5/s offered).
+    // A side belt running south into a west-east main belt, full on both lanes.
     for (let y = -8; y < 0; y++) {
       ents.push(e('transport-belt', 5, y, S));
       ents.push(e('wooden-chest', 3, y, N, { recipe: 'copper-plate' }));
       ents.push(e('fast-inserter', 4, y, E));
+      ents.push(e('wooden-chest', 7, y, N, { recipe: 'copper-plate' }));
+      ents.push(e('fast-inserter', 6, y, 3));
     }
     // The main belt starts one tile earlier, so the join is a side-load, not a curve.
     for (let x = 4; x < 10; x++) ents.push(e('transport-belt', x, 0, E));
@@ -116,6 +122,8 @@ describe('simulateLayout', () => {
       ents.push(e('transport-belt', 5, y, S));
       ents.push(e('wooden-chest', 3, y, N, { recipe: 'copper-plate' }));
       ents.push(e('fast-inserter', 4, y, E));
+      ents.push(e('wooden-chest', 7, y, N, { recipe: 'copper-plate' }));
+      ents.push(e('fast-inserter', 6, y, 3));
     }
     for (let x = 5; x < 10; x++) ents.push(e('transport-belt', x, 0, E));
     const r = simulateLayout({ entities: ents }, data);
@@ -231,9 +239,10 @@ describe('simulateLayout', () => {
   it('splitters split evenly, and send everything one way when the other side is blocked', () => {
     const build = (blockRight: boolean) => {
       const ents: PlacedEntity[] = [];
-      // 4 fast inserters from supply chests: 10/s into the belt.
-      for (let y = -4; y < 0; y++) {
+      // 4 fast inserters from supply chests, two per lane: 10/s into the belt.
+      for (let y = -2; y < 0; y++) {
         ents.push(e('transport-belt', 1, y, S), e('wooden-chest', -1, y, N, { recipe: 'iron-plate' }), e('fast-inserter', 0, y, E));
+        ents.push(e('wooden-chest', 3, y, N, { recipe: 'iron-plate' }), e('fast-inserter', 2, y, 3));
       }
       ents.push(e('splitter', 1, 0, S, { id: 'split' }));
       ents.push(e('transport-belt', 1, 1, S, { id: 'left' }), e('transport-belt', 1, 2, S));

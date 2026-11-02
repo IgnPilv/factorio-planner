@@ -5,6 +5,7 @@ import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js
 import { gameData } from '../data';
 import { iconBitmap, iconPath, type IconKind } from '../data/icons';
 import { ENTITIES, entityColor, isRotatable, shortLabel } from './catalog';
+import type { Contents } from './contents';
 import { entityRect, footprint, tileKey, type Direction, type Layout } from './model';
 import { centreLine, type Point, type RailEnd } from '../rails/geometry';
 import { railPiece, type PlacedRail } from './rails';
@@ -83,7 +84,7 @@ export class GridRenderer {
   private ghost: Ghost = { items: [] };
   private view: ViewOverlay = {};
   private textures = new Map<string, Texture>();
-  private contents: Record<string, string[]> = {};
+  private contents: Record<string, Contents> = {};
 
   async init(host: HTMLElement) {
     await this.app.init({
@@ -173,7 +174,7 @@ export class GridRenderer {
   }
 
   /** Item icons on belts, inserters and chests (see contents.ts). */
-  setContents(contents: Record<string, string[]>) {
+  setContents(contents: Record<string, Contents>) {
     this.contents = contents;
     if (this.ready) this.drawEntities();
   }
@@ -329,8 +330,29 @@ export class GridRenderer {
       if (own) icons.addChild(own);
 
       // What it carries, on a dark disc like the game's alt-mode.
-      const items = this.contents[e.id];
-      if (items?.length) {
+      const content = this.contents[e.id];
+      const items = content?.items;
+      if (content?.lanes) {
+        // One icon per lane, on that lane's half of each tile, like the game's belts.
+        const sz = TILE * 0.34;
+        const d = e.direction;
+        const lx = [0, 1, 0, -1][(d + 3) % 4]!;
+        const ly = [-1, 0, 1, 0][(d + 3) % 4]!;
+        const off = TILE * 0.22;
+        for (let ty = 0; ty < r.h; ty++)
+          for (let tx = 0; tx < r.w; tx++) {
+            const tcx = px + (tx + 0.5) * TILE;
+            const tcy = py + (ty + 0.5) * TILE;
+            for (const [name, sign] of [[content.lanes.left, 1], [content.lanes.right, -1]] as const) {
+              if (!name) continue;
+              const x = tcx + lx * off * sign;
+              const y = tcy + ly * off * sign;
+              const sp = this.icon(name, 'item', x, y, sz);
+              if (!sp) continue;
+              carried.addChild(new Graphics().circle(x, y, sz * 0.58).fill({ color: 0x000000, alpha: 0.55 }), sp);
+            }
+          }
+      } else if (items?.length) {
         const sz = TILE * (def.kind === 'chest' ? 0.62 : def.kind === 'inserter' ? 0.48 : 0.4);
         const n = items.length;
         // Inserters: bottom-right corner so the arm's arrow stays readable.
