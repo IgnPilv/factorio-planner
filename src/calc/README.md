@@ -18,7 +18,7 @@ Game rules used (Factorio 2.0/2.1):
 - Power = energy usage × (1 + consumption) + drain. Speed, consumption and pollution floor at −80%, productivity at 0 and caps at the recipe's maximum (+300% default).
 - Beacons: each gives distribution effectivity × modules × profile(n), so the base beacon totals 1.5 × √n × module.
 - Mining productivity research applies to drills; recipe productivity research to its recipe.
-- Boilers: steam/s = power / ((165 − 15) × 200 J); 1 pump : 20 boilers : 40 engines.
+- Boilers: steam/s = power / ((165 − 15) × 200 J), and 1 water makes 10 steam (2.0), so 1 offshore pump : 200 boilers : 400 engines.
 
 ## Steady-state layout model
 
@@ -33,18 +33,25 @@ splitter and chest, and nothing moves faster than its limit.
   against a building or head-on into another belt stop.
 - **Undergrounds** pair up along a line (upstream = entrance) within their
   max distance. **Splitters** take from behind both halves and pass on through
-  both fronts (even split isn't forced; the solver may route unevenly).
+  both fronts, half each way; the overflow goes to the other side only when
+  one side can't take more (a final balancing solve keeps the best total and
+  makes splits as even as possible).
 - **Inserters** move items from the tile behind to the tile in front (2 tiles
-  for long-handed), only items the target machine needs, at
-  hand × 60 / (2 × ceil(0.5 / rotation speed)) items/s: the wiki's
-  chest-to-chest figures (0.83, 1.2, 2.31/s). Capacity research adds to the
-  hand. Belt pickup can be a little slower in game; not modelled yet.
+  for long-handed), only items the target machine needs, at hand × 60 /
+  ticks per turn, where ticks per turn = 1 / rotation speed truncated and
+  rounded down to even: the 2.0 wiki's 76/70/48/24 ticks and 0.79, 0.86,
+  1.25, 2.5 items/s. Capacity research adds to the hand. With a bigger hand,
+  taking from or dropping onto a belt is somewhat slower in game; not
+  modelled yet.
 - **Drills** drop onto the tile beyond the middle of their front edge
   (belt, machine or chest). Burner machines need fuel (coal by default)
   inserted like any other input.
 - **Fluids**: pipes, pipe-to-ground pairs, tanks, pumps, offshore pumps,
   boilers and engines that touch form networks; other machines plug into
-  networks beside them. Pipe throughput isn't limited.
+  networks beside them. 2.0 pipelines have no length-based limit; each
+  machine connection moves at most 6000/s, a pump moves 1200/s one way
+  between two pipelines, and a pipeline wider than 250 tiles gets a warning
+  (it stops flowing in game).
 - **Power**: no generators in the layout means power is assumed to come from
   outside. Otherwise poles join within wire reach and cover their supply area;
   uncovered machines get no power, and a short network slows its machines.

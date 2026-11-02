@@ -87,17 +87,37 @@ export interface SteadyOptions {
 // Game mechanics
 
 /**
- * Inserter items per second, chest to chest: one swing each way takes
- * ceil(0.5 / rotation speed) ticks, and each round trip moves a full hand.
- * Matches the wiki: inserter 0.83/s, long-handed 1.2/s, fast 2.31/s.
+ * Ticks for an inserter's full turn (there and back). The game takes
+ * 1 / rotation speed in floating point, truncates it, and rounds an odd count
+ * down to even. That gives the 2.0 wiki's 76, 70, 48 and 24 ticks for the
+ * burner, ordinary, long-handed and fast/bulk inserters.
+ */
+export function inserterTicksPerTurn(entity: Entity): number {
+  const rot = entity.rotationSpeed ?? 0;
+  if (rot <= 0) return Infinity;
+  // 1/0.02 is exactly 50 in doubles but the game's float math lands just under.
+  const ticks = Math.floor(1 / rot - 1e-9);
+  return ticks % 2 === 0 ? ticks : ticks - 1;
+}
+
+/**
+ * Inserter items per second, chest to chest: the whole hand moves once per
+ * full turn. 2.0 wiki: burner 0.79/s, inserter 0.86/s, long-handed 1.25/s,
+ * fast 2.5/s, times hand size.
  */
 export function inserterThroughput(entity: Entity, bonuses?: ResearchBonuses): number {
-  const rot = entity.rotationSpeed ?? 0;
-  if (rot <= 0) return 0;
-  const swingTicks = Math.ceil(0.5 / rot - 1e-9);
-  const hand = inserterHandSize(entity, bonuses);
-  return (hand * 60) / (2 * swingTicks);
+  const ticks = inserterTicksPerTurn(entity);
+  if (!Number.isFinite(ticks) || ticks <= 0) return 0;
+  return (inserterHandSize(entity, bonuses) * 60) / ticks;
 }
+
+/**
+ * 2.0 fluids: each flow operation between fluid boxes moves at most 100 units
+ * per tick (6000/s); pipelines themselves have no length-based limit.
+ */
+export const FLUID_FLOW_LIMIT = 6000;
+/** A pipeline spanning more than this many tiles in either direction stops flowing (FFF #430). */
+export const PIPELINE_MAX_EXTENT = 250;
 
 export function inserterHandSize(entity: Entity, bonuses?: ResearchBonuses): number {
   const bonus = entity.bulk ? bonuses?.bulkInserterBonus ?? 0 : bonuses?.inserterStackBonus ?? 0;
@@ -165,7 +185,8 @@ function drillDropTile(q: Placed): [number, number] {
 const CRAFTERS = new Set(['assembler', 'furnace', 'chemical-plant', 'refinery', 'centrifuge', 'rocket-silo']);
 const MACHINES = new Set([...CRAFTERS, 'mining-drill', 'offshore-pump', 'boiler', 'generator', 'steam-turbine', 'solar-panel']);
 const BELTS = new Set(['belt', 'underground-belt', 'splitter']);
-const FLUID_CONNECTORS = new Set(['pipe', 'pipe-to-ground', 'storage-tank', 'pump', 'offshore-pump', 'boiler', 'generator', 'steam-turbine']);
+// Pumps are not connectors: they join two networks one way, at a limited rate.
+const FLUID_CONNECTORS = new Set(['pipe', 'pipe-to-ground', 'storage-tank', 'offshore-pump', 'boiler', 'generator', 'steam-turbine']);
 const POWER_PLANT = new Set(['offshore-pump', 'boiler', 'generator', 'steam-turbine']);
 
 // ---------------------------------------------------------------------------
@@ -505,7 +526,9 @@ export function simulateLayout(
       coef(v, balance(machineNode(id), fluid), -r);
       for (const net of nets) {
         const name = `xf:${net}>${id}:${fluid}`;
-        variables[name] = { [balance(`f:${net}`, fluid)]: -1, [balance(machineNode(id), fluid)]: 1 };
+        const capRow = `cap:${name}`;
+        variables[name] = { [balance(`f:${net}`, fluid)]: -1, [balance(machineNode(id), fluid)]: 1, [capRow]: 1 };
+        constraints[capRow] = { max: FLUID_FLOW_LIMIT };
         usedRows.add(balance(`f:${net}`, fluid));
       }
     }
@@ -513,7 +536,9 @@ export function simulateLayout(
       coef(v, balance(machineNode(id), fluid), r);
       for (const net of nets) {
         const name = `xf:${id}>${net}:${fluid}`;
-        variables[name] = { [balance(`f:${net}`, fluid)]: 1, [balance(machineNode(id), fluid)]: -1 };
+        const capRow = `cap:${name}`;
+        variables[name] = { [balance(`f:${net}`, fluid)]: 1, [balance(machineNode(id), fluid)]: -1, [capRow]: 1 };
+        constraints[capRow] = { max: FLUID_FLOW_LIMIT };
         usedRows.add(balance(`f:${net}`, fluid));
       }
     }
@@ -527,6 +552,19 @@ export function simulateLayout(
     }
     variables[`u:${id}`] = v;
   }
+  // Pumps move any fluid from the network behind them to the one in front.
+  const allFluids = new Set<string>();
+  for (const m of machines.values()) for (const f of [...m.fluidIn.keys(), ...m.fluidOut.keys()]) allFluids.add(f);
+  for (const link of fluidNet.pumps) {
+    const capRow = `cap:pump:${link.id}`;
+    constraints[capRow] = { max: link.capacity };
+    for (const fluid of allFluids) {
+      const from = balance(`f:${link.from}`, fluid);
+      const to = balance(`f:${link.to}`, fluid);
+      if (!usedRows.has(from) || !usedRows.has(to)) continue;
+      variables[`xp:${link.id}:${fluid}`] = { [from]: -1, [to]: 1, [capRow]: 1, obj: -1e-6 };
+    }
+  }
   for (const row of usedRows) {
     if (row.startsWith('bal:')) constraints[row] = { equal: 0 };
     else if (row.startsWith('pow:')) constraints[row] = { min: 0 };
@@ -538,7 +576,7 @@ export function simulateLayout(
   if (solution.status !== 'optimal') {
     return { ok: false, entities: {}, transport, outputs: [], inputs: [], power, warnings: [...warnings, `Solver: ${solution.status}`] };
   }
-  const values = new Map(solution.variables);
+  let values = new Map(solution.variables);
   const val = (n: string) => values.get(n) ?? 0;
 
   // Second solve with free disposal of every machine output: tells a machine
@@ -552,6 +590,13 @@ export function simulateLayout(
   }
   const relaxed = solve({ direction: 'maximize', objective: 'obj', constraints, variables: relaxedVars });
   const relaxedValues = new Map(relaxed.status === 'optimal' ? relaxed.variables : []);
+
+  // Third solve: keep the best total found, and among all ways to reach it
+  // pick the one where splitters split (and draw from their two inputs) as
+  // evenly as possible. That is the game's rule: half each way, with the
+  // overflow going to the other side only when one side can't take more.
+  const balanced = balanceSplitters(placed, flowVars, variables, constraints, solution.result);
+  if (balanced) values = balanced;
 
   // --- Results -------------------------------------------------------------
   const entities: Record<string, EntityState> = {};
@@ -640,6 +685,61 @@ export function simulateLayout(
     power,
     warnings,
   };
+}
+
+function balanceSplitters(
+  placed: Placed[],
+  flowVars: { name: string; edge: Edge; item: string }[],
+  variables: Record<string, Coefficients>,
+  constraints: Record<string, Constraint>,
+  best: number,
+): Map<string, number> | undefined {
+  const sides = new Map<string, Map<string, string[]>>(); // row group -> side tile -> flow vars
+  const splitterIds = new Set(placed.filter((q) => q.e.kind === 'splitter').map((q) => q.p.id));
+  if (splitterIds.size === 0) return undefined;
+  const add = (group: string, side: string, name: string) => {
+    let g = sides.get(group);
+    if (!g) sides.set(group, (g = new Map()));
+    let l = g.get(side);
+    if (!l) g.set(side, (l = []));
+    l.push(name);
+  };
+  for (const fv of flowVars) {
+    const at = fv.edge.id.split('@')[1]?.split('#')[0];
+    if (fv.edge.from.startsWith('s:') && splitterIds.has(fv.edge.from.slice(2)) && at) add(`out:${fv.edge.from}`, at, fv.name);
+    if (fv.edge.to.startsWith('s:') && splitterIds.has(fv.edge.to.slice(2))) add(`in:${fv.edge.to}`, fv.edge.from, fv.name);
+  }
+  const vars: Record<string, Record<string, number>> = {};
+  for (const [name, c] of Object.entries(variables)) {
+    const copy: Record<string, number> = { ...(c as Record<string, number>) };
+    const o = copy.obj ?? 0;
+    if (o !== 0) copy.objfix = o;
+    delete copy.obj;
+    vars[name] = copy;
+  }
+  const cons: Record<string, Constraint> = { ...constraints, objfix: { min: best - 1e-7 * Math.max(1, Math.abs(best)) } };
+  let any = false;
+  for (const [group, g] of sides) {
+    const list = [...g.values()];
+    if (list.length !== 2) continue;
+    any = true;
+    const [a, b] = list as [string[], string[]];
+    const imb = `imb:${group}`;
+    vars[imb] = { imbalance: 1, [`${imb}:p`]: 1, [`${imb}:n`]: 1 };
+    cons[`${imb}:p`] = { min: 0 };
+    cons[`${imb}:n`] = { min: 0 };
+    for (const n of a) {
+      vars[n]![`${imb}:p`] = (vars[n]![`${imb}:p`] ?? 0) - 1;
+      vars[n]![`${imb}:n`] = (vars[n]![`${imb}:n`] ?? 0) + 1;
+    }
+    for (const n of b) {
+      vars[n]![`${imb}:p`] = (vars[n]![`${imb}:p`] ?? 0) + 1;
+      vars[n]![`${imb}:n`] = (vars[n]![`${imb}:n`] ?? 0) - 1;
+    }
+  }
+  if (!any) return undefined;
+  const r = solve({ direction: 'minimize', objective: 'imbalance', constraints: cons, variables: vars });
+  return r.status === 'optimal' ? new Map(r.variables) : undefined;
 }
 
 function blankTransport(kind: TransportState['kind'], capacity: number): TransportState {
@@ -769,8 +869,43 @@ function buildFluidNetworks(
       if (!s) offered.set(net, (s = new Set()));
       for (const f of m.fluidOut.keys()) s.add(f);
     }
+  // Pumps: from the network behind to the one in front.
+  const pumps: { id: string; from: string; to: string; capacity: number }[] = [];
+  const netAt = (x: number, y: number) => {
+    const n = at(x, y);
+    return n && parent.has(n.p.id) ? find(n.p.id) : undefined;
+  };
+  for (const q of placed) {
+    if (q.e.kind !== 'pump') continue;
+    const [fx, fy] = drillDropTile(q);
+    const back = drillDropTile({ ...q, d: opposite(q.d) });
+    const to = netAt(fx, fy);
+    const from = netAt(back[0], back[1]);
+    if (from && to && from !== to) pumps.push({ id: q.p.id, from, to, capacity: q.e.pumpingSpeed ?? 1200 });
+    else warnings.push(`Pump at ${q.x},${q.y} is not between two pipelines`);
+  }
+  // Pipelines wider than 250 tiles stop flowing.
+  const extent = new Map<string, [number, number, number, number]>();
+  for (const q of connectors) {
+    const r = find(q.p.id);
+    const b = extent.get(r) ?? [Infinity, Infinity, -Infinity, -Infinity];
+    extent.set(r, [Math.min(b[0], q.x), Math.min(b[1], q.y), Math.max(b[2], q.x + q.w), Math.max(b[3], q.y + q.h)]);
+  }
+  for (const [, [x0, y0, x1, y1]] of extent) {
+    if (x1 - x0 > PIPELINE_MAX_EXTENT || y1 - y0 > PIPELINE_MAX_EXTENT) {
+      warnings.push(`A pipeline spans more than ${PIPELINE_MAX_EXTENT} tiles; in game it stops flowing (split it with a pump)`);
+    }
+  }
+  // Pumped fluids count as offered downstream.
+  for (const link of pumps) {
+    const src = offered.get(link.from);
+    if (!src) continue;
+    let dst = offered.get(link.to);
+    if (!dst) offered.set(link.to, (dst = new Set()));
+    for (const f of src) dst.add(f);
+  }
   const carries = (machine: string, fluid: string) => (netsOf.get(machine) ?? []).some((n) => offered.get(n)?.has(fluid));
-  return { netsOf, carries };
+  return { netsOf, carries, pumps };
 }
 
 // ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ import { gameData as data } from '../src/data';
 import {
   allResearched,
   inserterThroughput,
+  inserterTicksPerTurn,
   researchBonuses,
   simulateLayout,
   type Flow,
@@ -26,17 +27,24 @@ const N = 0, E = 1, S = 2;
 
 describe('inserter throughput (wiki chest-to-chest figures)', () => {
   const t = (name: string, research = {}) => inserterThroughput(data.entities[name]!, researchBonuses(data, research));
-  it('burner 0.77/s, inserter 0.83/s, long-handed 1.2/s, fast 2.31/s', () => {
-    expect(t('burner-inserter')).toBeCloseTo(60 / 78, 3);
-    expect(t('inserter')).toBeCloseTo(0.833, 3);
-    expect(t('long-handed-inserter')).toBeCloseTo(1.2, 3);
-    expect(t('fast-inserter')).toBeCloseTo(2.308, 3);
+  it('2.0 turn times: burner 76, inserter 70, long-handed 48, fast and bulk 24 ticks', () => {
+    expect(inserterTicksPerTurn(data.entities['burner-inserter']!)).toBe(76);
+    expect(inserterTicksPerTurn(data.entities['inserter']!)).toBe(70);
+    expect(inserterTicksPerTurn(data.entities['long-handed-inserter']!)).toBe(48);
+    expect(inserterTicksPerTurn(data.entities['fast-inserter']!)).toBe(24);
+    expect(inserterTicksPerTurn(data.entities['bulk-inserter']!)).toBe(24);
+  });
+  it('burner 0.79/s, inserter 0.86/s, long-handed 1.25/s, fast 2.5/s', () => {
+    expect(t('burner-inserter')).toBeCloseTo(60 / 76, 3);
+    expect(t('inserter')).toBeCloseTo(60 / 70, 3);
+    expect(t('long-handed-inserter')).toBeCloseTo(1.25, 3);
+    expect(t('fast-inserter')).toBeCloseTo(2.5, 3);
   });
   it('bulk inserter hand grows with capacity research', () => {
     // All capacity research: bulk hand 1 + 1 (bulk-inserter) + 1+1+1+1+2+2+2 = 12.
-    expect(t('bulk-inserter', allResearched(data))).toBeCloseTo(12 * 2.308, 2);
+    expect(t('bulk-inserter', allResearched(data))).toBeCloseTo(12 * 2.5, 2);
     // Ordinary inserters get +2 from capacity bonus 2 and 7.
-    expect(t('fast-inserter', allResearched(data))).toBeCloseTo(3 * 2.308, 2);
+    expect(t('fast-inserter', allResearched(data))).toBeCloseTo(3 * 2.5, 2);
   });
 });
 
@@ -91,7 +99,7 @@ describe('simulateLayout', () => {
     expect(flow(r.outputs, 'copper-plate')).toBeCloseTo(15);
   });
 
-  it('an assembler fed by one basic inserter is starved to 0.83/3 of full speed', () => {
+  it('an assembler fed by one basic inserter is starved to 0.86/3 of full speed', () => {
     const ents = [
       e('wooden-chest', 0, 1, N, { recipe: 'iron-plate' }),
       e('inserter', 1, 1, E),
@@ -102,8 +110,8 @@ describe('simulateLayout', () => {
     const r = simulateLayout({ entities: ents }, data);
     const asm = r.entities.asm!;
     expect(asm.status).toBe('starved');
-    expect(asm.activity).toBeCloseTo(0.8333 / 3, 3);
-    expect(flow(r.outputs, 'iron-gear-wheel')).toBeCloseTo(0.8333 / 2, 3);
+    expect(asm.activity).toBeCloseTo(60 / 70 / 3, 3);
+    expect(flow(r.outputs, 'iron-gear-wheel')).toBeCloseTo(60 / 70 / 2, 3);
   });
 
   it('an assembler with no way out is output-blocked', () => {
@@ -194,7 +202,61 @@ describe('simulateLayout', () => {
     expect(r.power.demandW).toBeCloseTo(demand, -2);
     expect(r.entities.engine!.activity).toBeCloseTo(demand / 900e3, 3);
     expect(r.entities.boiler!.activity).toBeCloseTo(demand / 1.8e6, 3);
-    expect(r.entities.pump!.activity).toBeCloseTo((demand / 900e3) * 30 / 1200, 4);
+    expect(r.entities.pump!.activity).toBeCloseTo((demand / 900e3) * 30 / 10 / 1200, 5);
+  });
+
+  it('splitters split evenly, and send everything one way when the other side is blocked', () => {
+    const build = (blockRight: boolean) => {
+      const ents: PlacedEntity[] = [];
+      // 4 fast inserters from supply chests: 10/s into the belt.
+      for (let y = -4; y < 0; y++) {
+        ents.push(e('transport-belt', 1, y, S), e('wooden-chest', -1, y, N, { recipe: 'iron-plate' }), e('fast-inserter', 0, y, E));
+      }
+      ents.push(e('splitter', 1, 0, S, { id: 'split' }));
+      ents.push(e('transport-belt', 1, 1, S, { id: 'left' }), e('transport-belt', 1, 2, S));
+      ents.push(e('transport-belt', 2, 1, S, { id: 'right' }));
+      // A belt pointing back up stops the right side.
+      if (blockRight) ents.push(e('transport-belt', 2, 2, N));
+      else ents.push(e('transport-belt', 2, 2, S));
+      return simulateLayout({ entities: ents }, data);
+    };
+    const even = build(false);
+    expect(even.transport.left!.perSecond).toBeCloseTo(5);
+    expect(even.transport.right!.perSecond).toBeCloseTo(5);
+    const blocked = build(true);
+    expect(blocked.transport.left!.perSecond).toBeCloseTo(10);
+    expect(blocked.transport.right!.perSecond).toBeCloseTo(0);
+  });
+
+  it('pumps move fluid one way between pipelines', () => {
+    const build = (pumpDir: Dir) =>
+      simulateLayout(
+        {
+          entities: [
+            e('offshore-pump', 0, 0, N),
+            e('pipe', 0, 1),
+            // 1x2 pump between two pipes; its arrow is the flow direction.
+            e('pump', 0, 2, pumpDir, { id: 'pump' }),
+            e('pipe', 0, 4),
+            e('boiler', 0, 5, S, { id: 'boiler' }),
+            e('wooden-chest', 4, 5, N, { recipe: 'coal' }),
+            e('inserter', 3, 5, 3),
+            e('steam-engine', 0, 7, N),
+            e('wooden-chest', 10, 1, N, { recipe: 'iron-plate' }),
+            e('fast-inserter', 11, 1, E),
+            e('assembling-machine-1', 12, 0, N, { recipe: 'iron-gear-wheel', id: 'asm' }),
+            e('fast-inserter', 15, 1, E),
+            e('wooden-chest', 16, 1, N),
+          ],
+          water: ['0,-1'],
+        },
+        data,
+      );
+    expect(build(S).entities.boiler!.activity).toBeGreaterThan(0);
+    expect(build(S).entities.asm!.status).toBe('working');
+    const reversed = build(N);
+    expect(reversed.entities.boiler!.activity).toBe(0);
+    expect(reversed.entities.asm!.activity).toBe(0);
   });
 
   it('slows machines down when generation is short', () => {
