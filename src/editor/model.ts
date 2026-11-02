@@ -17,6 +17,15 @@ export interface PlacedEntity {
   direction: Direction;
   recipe?: string;
   modules?: string[];
+  /** Inserters: item filters (up to 5). Splitters: the first entry is the filter item. */
+  filters?: string[];
+  /** Inserters: filters exclude instead of allow. */
+  filterMode?: 'blacklist';
+  /** Splitters: preferred input and output side, seen facing the way items travel. */
+  inputPriority?: 'left' | 'right';
+  outputPriority?: 'left' | 'right';
+  /** Requester and buffer chests: logistic requests. */
+  requests?: { name: string; count: number }[];
 }
 
 export interface Layout {
