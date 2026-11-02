@@ -15,7 +15,7 @@
 import { gameData } from '../data';
 import { ENTITIES } from '../editor/catalog';
 import { footprint, groupBounds, type Clipboard, type Direction, type PlacedEntity } from '../editor/model';
-import { isRailName, RAIL_ITEM, railValid, signalDirectionAt, type PlacedRail } from '../editor/rails';
+import { isRailName, RAIL_ITEM, railValid, signalAt, type PlacedRail } from '../editor/rails';
 import { poleInfo } from '../editor/power';
 import {
   encodeVersion,
@@ -69,6 +69,7 @@ export function layoutToBlueprint(entities: readonly PlacedEntity[], opts: Expor
       position: { x: e.x - b.x + w / 2, y: e.y - b.y + h / 2 },
     };
     if (dir) be.direction = dir * 4;
+    if (e.diagonal && def.kind === 'rail-signal') be.direction = dir * 4 + 2;
     if (def.kind === 'underground-belt') be.type = ugRole.get(e.id) ?? 'input';
     if (e.recipe && RECIPE_PROTOTYPES.has(def.prototype) && def.kind !== 'rocket-silo') be.recipe = e.recipe;
     const items = moduleRequests(def.prototype, e.modules);
@@ -321,7 +322,9 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
       continue;
     }
     const raw = be.direction ?? 0;
-    let dir = (Math.round(legacy ? raw / 2 : raw / 4) % 4) as Direction;
+    // Signals on 45° track face a diagonal: keep the quarter below and mark it.
+    const diagonalSignal = def.kind === 'rail-signal' && (legacy ? raw % 2 === 1 : raw % 4 === 2);
+    let dir = (diagonalSignal ? Math.floor(legacy ? raw / 2 : raw / 4) : Math.round(legacy ? raw / 2 : raw / 4) % 4) as Direction;
     if (def.kind === 'inserter') dir = ((dir + 2) % 4) as Direction;
     const { w, h } = footprint(def, dir);
     const e: Omit<PlacedEntity, 'id'> = {
@@ -330,6 +333,7 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
       y: Math.round(be.position.y - h / 2),
       direction: dir,
     };
+    if (diagonalSignal) e.diagonal = true;
     if (be.recipe && gameRecipeOk(be.recipe)) e.recipe = be.recipe;
     const modules = readModules(be, def.moduleSlots ?? 0);
     if (modules) e.modules = modules;
@@ -341,8 +345,12 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
   if (rails.length)
     for (const e of placed) {
       if (ENTITIES[e.name]?.kind !== 'rail-signal') continue;
-      const d = signalDirectionAt(rails as PlacedRail[], e.x, e.y, e.direction);
-      if (d !== null) e.direction = d as Direction;
+      const found = signalAt(rails as PlacedRail[], e.x, e.y, e.direction);
+      if (found) {
+        e.direction = found.direction as Direction;
+        if (found.diagonal) e.diagonal = true;
+        else delete e.diagonal;
+      }
     }
   const b = groupBounds(placed, rails);
   const clipboard: Clipboard = { w: b.w, h: b.h, entities: placed.map((e) => ({ ...e, x: e.x - b.x, y: e.y - b.y })) };

@@ -33,7 +33,7 @@ export interface Camera {
 
 export interface Ghost {
   /** tiles that show a ghost; each one can be valid or not */
-  items: { name: string; x: number; y: number; direction: Direction; ok: boolean }[];
+  items: { name: string; x: number; y: number; direction: Direction; diagonal?: boolean; ok: boolean }[];
   /** extra highlighted tiles (water brush, eraser) */
   brush?: { tiles: [number, number][]; color: number };
   /** selection rectangle being dragged, in tiles (inclusive) */
@@ -275,6 +275,7 @@ export class GridRenderer {
         .stroke({ width: 1, color: 0x000000, alpha: 0.6 });
 
       if (def.kind === 'belt') drawChevrons(marks, px, py, e.direction);
+      else if (def.kind === 'rail-signal') drawFacing(marks, px + w / 2, py + h / 2, e.direction * 4 + (e.diagonal ? 2 : 0), w * 0.38);
       else if (def.kind === 'inserter') drawArrow(marks, px, py, w, h, e.direction, 0.45);
       else if (def.kind === 'offshore-pump') drawArrow(marks, px, py, w, h, ((e.direction + 2) % 4) as Direction, 0.35);
       else if (isRotatable(def)) drawArrow(marks, px, py, w, h, e.direction, Math.min(0.25, 10 / Math.min(w, h)));
@@ -411,6 +412,7 @@ export class GridRenderer {
       g.rect(it.x * TILE, it.y * TILE, w * TILE, h * TILE).fill({ color: entityColor(def), alpha: 0.45 }).stroke({ width: 2, color, alpha: 0.9 });
       const arrows = new Graphics();
       if (def.kind === 'belt') drawChevrons(arrows, it.x * TILE, it.y * TILE, it.direction);
+      else if (def.kind === 'rail-signal') drawFacing(arrows, (it.x + 0.5) * TILE, (it.y + 0.5) * TILE, it.direction * 4 + (it.diagonal ? 2 : 0), TILE * 0.38);
       else if (def.kind === 'offshore-pump') drawArrow(arrows, it.x * TILE, it.y * TILE, w * TILE, h * TILE, ((it.direction + 2) % 4) as Direction, 0.35);
       else if (isRotatable(def)) drawArrow(arrows, it.x * TILE, it.y * TILE, w * TILE, h * TILE, it.direction, Math.min(0.3, 12 / Math.min(w * TILE, h * TILE) + 0.1));
       arrows.fill({ color: 0xffffff, alpha: 0.8 });
@@ -486,4 +488,11 @@ function drawTrack(g: Graphics, rails: readonly Omit<PlacedRail, 'id'>[], alpha:
     polyline(g, pts, -0.38);
   }
   g.stroke({ width: 2.5, color: 0xb9bec4, alpha });
+}
+
+/** A triangle at (cx, cy) pointing along a 16-way heading. */
+function drawFacing(g: Graphics, cx: number, cy: number, dir16: number, r: number) {
+  const a = (dir16 * Math.PI) / 8;
+  const fx = Math.sin(a), fy = -Math.cos(a);
+  g.poly([cx + fx * r, cy + fy * r, cx - fx * r * 0.6 - fy * r * 0.7, cy - fy * r * 0.6 + fx * r * 0.7, cx - fx * r * 0.6 + fy * r * 0.7, cy - fy * r * 0.6 - fx * r * 0.7]);
 }
