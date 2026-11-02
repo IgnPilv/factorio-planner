@@ -2,7 +2,7 @@ import { solve, type Coefficients, type Constraint } from 'yalps';
 import type { Entity, EntityKind, GameData, Recipe } from '../data/types';
 import type { BeaconInfluence } from './effects';
 import { sumFlows, type Flow } from './flow';
-import { ELECTRICITY, machineRate, type EntityRate } from './machine';
+import { ELECTRICITY, machineRate, recipeCategories, type EntityRate } from './machine';
 import { researchBonuses, type ResearchBonuses, type ResearchState } from './research';
 
 /** Beacons around every machine of one recipe in the calculator. */
@@ -23,7 +23,11 @@ export interface SolveOptions {
   /** What to make, per second. */
   targets: Flow[];
   research?: ResearchState;
-  /** Item -> recipe name to make it with, or "import" to treat it as a raw input. */
+  /**
+   * Item -> recipe name to make it with, or "import" to treat it as a raw input.
+   * Without a choice, every unlocked recipe for the item is offered to the
+   * solver, which picks the mix needing the fewest mines.
+   */
   recipeFor?: Record<string, string>;
   /** Recipe, resource or category name -> entity to use. */
   machineFor?: Record<string, string>;
@@ -31,7 +35,7 @@ export interface SolveOptions {
   modules?: Record<string, string[]>;
   /** Recipe or resource name -> beacons around each machine. */
   beacons?: Record<string, BeaconSetup>;
-  /** Extra recipes the solver may use alongside the chosen ones (e.g. oil cracking). */
+  /** Extra recipes the solver may use alongside the chosen ones. */
   extraRecipes?: string[];
   /** Items to take as inputs instead of making them. */
   imports?: string[];
@@ -139,8 +143,8 @@ export function solveFactory(data: GameData, options: SolveOptions): SolveResult
       importables.add(item);
       continue;
     }
-    const p = producerFor(ctx, item, choice);
-    if (p) addProcess(p);
+    const producers = producersFor(ctx, item, choice);
+    if (producers.length > 0) producers.forEach(addProcess);
     else importables.add(item);
   }
 
@@ -218,7 +222,7 @@ export function solveFactory(data: GameData, options: SolveOptions): SolveResult
   const surplus: Flow[] = [];
   for (const [k, v] of net) {
     const extra = v - (demand.get(k) ?? 0);
-    if (extra > 1e-6 && k !== ELECTRICITY) surplus.push({ name: k, perSecond: extra });
+    if (extra > 1e-4 && k !== ELECTRICITY) surplus.push({ name: k, perSecond: extra });
   }
   const resources = sumFlows(
     solved.filter((p) => p.kind === 'mine' || p.kind === 'pump').flatMap((p) => p.outputs),
@@ -239,44 +243,52 @@ interface BuildContext {
   fuel: string;
 }
 
-function producerFor(ctx: BuildContext, item: string, choice: string | undefined): Process | undefined {
+function producersFor(ctx: BuildContext, item: string, choice: string | undefined): Process[] {
   const { data } = ctx;
+  const one = (p: Process | undefined) => (p ? [p] : []);
   if (choice) {
     const recipe = data.recipes[choice];
-    if (recipe) return recipeProcess(ctx, recipe);
+    if (recipe) return one(recipeProcess(ctx, recipe));
     ctx.warnings.push(`Unknown recipe ${choice} for ${item}`);
   }
-  if (item === ELECTRICITY) return generatorProcess(ctx);
+  if (item === ELECTRICITY) return one(generatorProcess(ctx));
   const resource = Object.values(data.resources).find((r) => r.results.some((p) => p.name === item));
-  if (resource) return mineProcess(ctx, resource.name);
+  if (resource) return one(mineProcess(ctx, resource.name));
   const pump = pickEntity(ctx, item, (e) => e.kind === 'offshore-pump' && (e.fluid ?? 'water') === item, 'pumpingSpeed');
-  if (pump) return pumpProcess(ctx, pump, item);
+  if (pump) return [pumpProcess(ctx, pump, item)];
   if (item === 'steam') {
     const boiler = pickEntity(ctx, 'boiler', (e) => e.kind === 'boiler', 'energyUsage');
-    if (boiler) return boilerProcess(ctx, boiler);
+    if (boiler) return [boilerProcess(ctx, boiler)];
   }
-  const recipe = pickRecipe(ctx, item);
-  return recipe ? recipeProcess(ctx, recipe) : undefined;
+  return candidateRecipes(ctx, item).flatMap((r) => one(recipeProcess(ctx, r)));
 }
 
-/** Default recipe for an item: one named like it, else the simplest unlocked one. */
-export function pickRecipe(ctx: { data: GameData; bonuses: ResearchBonuses; warnings: string[]; options?: SolveOptions }, item: string): Recipe | undefined {
+/**
+ * Recipes the solver may use to make an item when the user hasn't picked one:
+ * every unlocked recipe (the solver then picks the mix that needs the least
+ * raw resources, e.g. advanced oil processing plus cracking). If none is
+ * unlocked, the simplest locked one, with a warning.
+ * Barrel, recycling and self-consuming recipes (kovarex) are left out.
+ */
+export function candidateRecipes(
+  ctx: { data: GameData; bonuses: ResearchBonuses; warnings: string[]; options?: SolveOptions },
+  item: string,
+): Recipe[] {
   const all = Object.values(ctx.data.recipes).filter(
     (r) =>
       r.results.some((p) => p.name === item) &&
       r.category !== 'recycling' &&
       !/barrel/.test(r.name) &&
-      // Don't pick a recipe that consumes what it makes (e.g. kovarex) by default.
       !r.ingredients.some((i) => i.name === item),
   );
-  if (all.length === 0) return undefined;
+  if (all.length === 0) return [];
+  const unlocked = all.filter((r) => ctx.bonuses.unlockedRecipes.has(r.name));
+  if (unlocked.length > 0) return unlocked;
+  if (ctx.options?.onlyResearched) return [];
   const score = (r: Recipe) => (r.name === item ? 0 : 1) * 100 + r.results.length * 10 + r.ingredients.length;
-  const unlocked = all.filter((r) => ctx.bonuses.unlockedRecipes.has(r.name)).sort((a, b) => score(a) - score(b));
-  if (unlocked[0]) return unlocked[0];
-  if (ctx.options?.onlyResearched) return undefined;
-  const any = [...all].sort((a, b) => score(a) - score(b))[0]!;
-  ctx.warnings.push(`${any.name} is not researched yet`);
-  return any;
+  const fallback = [...all].sort((a, b) => score(a) - score(b))[0]!;
+  ctx.warnings.push(`${fallback.name} is not researched yet`);
+  return [fallback];
 }
 
 function entityAvailable(ctx: BuildContext, e: Entity): boolean {
@@ -308,8 +320,10 @@ function pickEntity(
   const available = candidates.filter((e) => entityAvailable(ctx, e));
   if (available[0]) return available[0];
   if (ctx.options.onlyResearched) return undefined;
-  ctx.warnings.push(`${candidates[0]!.name} is not researched yet`);
-  return candidates[0];
+  // Nothing researched yet: assume the earliest (slowest) tier.
+  const earliest = candidates[candidates.length - 1]!;
+  ctx.warnings.push(`${earliest.name} is not researched yet`);
+  return earliest;
 }
 
 function beaconInfluences(setup: BeaconSetup | undefined): BeaconInfluence[] {
@@ -351,9 +365,9 @@ function recipeProcess(ctx: BuildContext, recipe: Recipe): Process | undefined {
   const entity = pickEntity(
     ctx,
     recipe.name,
-    (e) => CRAFTER_KINDS.includes(e.kind) && (e.categories ?? []).includes(recipe.category),
+    (e) => CRAFTER_KINDS.includes(e.kind) && recipeCategories(recipe).some((c) => (e.categories ?? []).includes(c)),
     'craftingSpeed',
-    [recipe.category],
+    recipeCategories(recipe),
   );
   if (!entity) {
     ctx.warnings.push(`No building can craft ${recipe.name}`);
@@ -381,9 +395,8 @@ function mineProcess(ctx: BuildContext, resourceName: string): Process | undefin
   const modules = ctx.options.modules?.[resource.name] ?? [];
   const beacons = ctx.options.beacons?.[resource.name];
   const rate = machineRate(ctx.data, { entity: entity.name, recipe: resource.name, modules, beacons: beaconInfluences(beacons) }, ctx.bonuses);
-  // Cost: raw resource extracted, so the solver prefers recipes that use less ore.
-  const extracted = rate.outputs.reduce((s, o) => s + o.perSecond, 0);
-  return makeProcess(ctx, `mine:${resource.name}`, 'mine', resource.name, entity, rate, modules, beacons, extracted);
+  // Cost: one per drill, so the solver prefers recipe mixes that need fewer mines.
+  return makeProcess(ctx, `mine:${resource.name}`, 'mine', resource.name, entity, rate, modules, beacons, 1);
 }
 
 function pumpProcess(ctx: BuildContext, entity: Entity, fluid: string): Process {

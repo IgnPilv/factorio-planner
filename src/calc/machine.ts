@@ -203,6 +203,11 @@ export function machineRate(
   }
 }
 
+/** Machine categories a recipe can be crafted in (2.1 allows several). */
+export function recipeCategories(recipe: Recipe): string[] {
+  return recipe.categories?.length ? recipe.categories : [recipe.category];
+}
+
 /** Steam units per second a boiler makes at full fuel use. */
 export function boilerSteamPerSecond(entity: Entity): number {
   const target = entity.temperature ?? 165;
@@ -228,7 +233,7 @@ function craftingRate(
     if (entity.energySource === 'electric') rate.powerW = entity.drain ?? 0;
     return rate;
   }
-  if (entity.categories && !entity.categories.includes(recipe.category)) {
+  if (entity.categories && !recipeCategories(recipe).some((c) => entity.categories!.includes(c))) {
     warnings.push(`${entity.name} can't craft ${recipe.name} (category ${recipe.category})`);
   }
   if (!bonuses.unlockedRecipes.has(recipe.name)) {

@@ -22,6 +22,7 @@ function recipe(
     name,
     displayName: name,
     category,
+    categories: [category],
     time,
     ingredients: ingredients.map(([n, a, t]) => ({ name: n, amount: a, type: t ?? 'item' })),
     results: results.map(([n, a, t]) => ({ name: n, amount: a, type: t ?? 'item' })),
