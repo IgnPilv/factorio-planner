@@ -378,7 +378,7 @@ function readRail(be: BlueprintEntity, legacy: boolean): Omit<PlacedRail, 'id'> 
 function signalOnTrack(rails: readonly Omit<PlacedRail, 'id'>[], be: BlueprintEntity): boolean {
   if (!rails.length) return false;
   const tx = Math.floor(be.position.x), ty = Math.floor(be.position.y);
-  return signalDirectionAt(rails as PlacedRail[], tx, ty, 0) !== null;
+  return signalAt(rails as PlacedRail[], tx, ty, 0) !== null;
 }
 
 const gameRecipeOk = (r: string) => !!gameData.recipes[r];
