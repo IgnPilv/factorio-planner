@@ -10,7 +10,7 @@ export const ENTITIES: Record<string, Entity> = gameData.entities;
 const ROTATABLE: ReadonlySet<EntityKind> = new Set<EntityKind>([
   'belt', 'underground-belt', 'splitter', 'inserter', 'mining-drill', 'offshore-pump', 'pump',
   'boiler', 'generator', 'assembler', 'chemical-plant', 'refinery', 'storage-tank', 'pipe-to-ground',
-  'steam-turbine', 'heat-exchanger', 'rail-signal', 'train-stop',
+  'steam-turbine', 'heat-exchanger', 'rail-signal', 'train-stop', 'combinator', 'gate',
 ]);
 export const isRotatable = (ent: Entity) => ROTATABLE.has(ent.kind) || ent.width !== ent.height;
 
@@ -24,6 +24,8 @@ const KIND_COLOR: Partial<Record<EntityKind, number>> = {
   'underground-belt': 0xb8912a, splitter: 0xd8b13a, 'pipe-to-ground': 0x5c6a79, pump: 0x5a7a9a,
   reactor: 0x4a7a4a, 'heat-exchanger': 0x9a6a5a, 'steam-turbine': 0x7a7a7a,
   'rail-signal': 0x4f9a4f, 'train-stop': 0xa04a3a,
+  radar: 0x6a7a6a, lamp: 0xd8d080, wall: 0x9a9a8a, gate: 0x8a9aaa, turret: 0x8a6a4a,
+  combinator: 0x5a7a5a, circuit: 0x6a6a8a, 'heat-pipe': 0xa05a3a,
 };
 const NAME_COLOR: Record<string, number> = {
   'fast-transport-belt': 0xc8463b, 'express-transport-belt': 0x3b8bd0,
@@ -51,10 +53,12 @@ const GROUPS: { title: string; kinds: EntityKind[] }[] = [
   { title: 'Belts', kinds: ['belt', 'underground-belt', 'splitter'] },
   { title: 'Inserters and storage', kinds: ['inserter', 'chest', 'storage-tank'] },
   { title: 'Water and fluids', kinds: ['offshore-pump', 'pipe', 'pipe-to-ground', 'pump'] },
-  { title: 'Power', kinds: ['pole', 'boiler', 'generator', 'solar-panel', 'accumulator', 'reactor', 'heat-exchanger', 'steam-turbine'] },
+  { title: 'Power', kinds: ['pole', 'boiler', 'generator', 'solar-panel', 'accumulator', 'reactor', 'heat-pipe', 'heat-exchanger', 'steam-turbine'] },
   { title: 'Robots', kinds: ['roboport'] },
   { title: 'Trains', kinds: ['rail-signal', 'train-stop'] },
   { title: 'Mining and smelting', kinds: ['mining-drill', 'furnace'] },
+  { title: 'Circuits and lamps', kinds: ['combinator', 'circuit', 'lamp'] },
+  { title: 'Defense', kinds: ['wall', 'gate', 'turret', 'radar'] },
   { title: 'Production', kinds: ['assembler', 'refinery', 'chemical-plant', 'centrifuge', 'lab', 'beacon', 'rocket-silo'] },
 ];
 

@@ -110,7 +110,15 @@ export type EntityKind =
   | 'roboport'
   | 'rail-signal'
   | 'train-stop'
-  | 'rolling-stock';
+  | 'rolling-stock'
+  | 'radar'
+  | 'lamp'
+  | 'wall'
+  | 'gate'
+  | 'turret'
+  | 'combinator'
+  | 'circuit'
+  | 'heat-pipe';
 
 export type EnergySourceType = 'electric' | 'burner' | 'heat' | 'fluid' | 'void';
 

@@ -9139,6 +9139,30 @@
    "wikiUrl": "https://wiki.factorio.com/Active_provider_chest",
    "inventorySize": 48
   },
+  "arithmetic-combinator": {
+   "name": "arithmetic-combinator",
+   "displayName": "Arithmetic combinator",
+   "prototype": "arithmetic-combinator",
+   "kind": "combinator",
+   "width": 1,
+   "height": 2,
+   "item": "arithmetic-combinator",
+   "icon": "__base__/graphics/icons/arithmetic-combinator.png",
+   "wikiUrl": "https://wiki.factorio.com/Arithmetic_combinator",
+   "energySource": "electric",
+   "energyUsage": 1000
+  },
+  "artillery-turret": {
+   "name": "artillery-turret",
+   "displayName": "Artillery turret",
+   "prototype": "artillery-turret",
+   "kind": "turret",
+   "width": 3,
+   "height": 3,
+   "item": "artillery-turret",
+   "icon": "__base__/graphics/icons/artillery-turret.png",
+   "wikiUrl": "https://wiki.factorio.com/Artillery_turret"
+  },
   "artillery-wagon": {
    "name": "artillery-wagon",
    "displayName": "Artillery wagon",
@@ -9500,6 +9524,41 @@
     "chemistry"
    ]
   },
+  "constant-combinator": {
+   "name": "constant-combinator",
+   "displayName": "Constant combinator",
+   "prototype": "constant-combinator",
+   "kind": "combinator",
+   "width": 1,
+   "height": 1,
+   "item": "constant-combinator",
+   "icon": "__base__/graphics/icons/constant-combinator.png",
+   "wikiUrl": "https://wiki.factorio.com/Constant_combinator"
+  },
+  "decider-combinator": {
+   "name": "decider-combinator",
+   "displayName": "Decider combinator",
+   "prototype": "decider-combinator",
+   "kind": "combinator",
+   "width": 1,
+   "height": 2,
+   "item": "decider-combinator",
+   "icon": "__base__/graphics/icons/decider-combinator.png",
+   "wikiUrl": "https://wiki.factorio.com/Decider_combinator",
+   "energySource": "electric",
+   "energyUsage": 1000
+  },
+  "display-panel": {
+   "name": "display-panel",
+   "displayName": "Display panel",
+   "prototype": "display-panel",
+   "kind": "circuit",
+   "width": 1,
+   "height": 1,
+   "item": "display-panel",
+   "icon": "__base__/graphics/icons/display-panel.png",
+   "wikiUrl": "https://wiki.factorio.com/Display_panel"
+  },
   "electric-furnace": {
    "name": "electric-furnace",
    "displayName": "Electric furnace",
@@ -9652,6 +9711,28 @@
    "jointDistance": 4,
    "connectionDistance": 3
   },
+  "gate": {
+   "name": "gate",
+   "displayName": "Gate",
+   "prototype": "gate",
+   "kind": "gate",
+   "width": 1,
+   "height": 1,
+   "item": "gate",
+   "icon": "__base__/graphics/icons/gate.png",
+   "wikiUrl": "https://wiki.factorio.com/Gate"
+  },
+  "gun-turret": {
+   "name": "gun-turret",
+   "displayName": "Gun turret",
+   "prototype": "ammo-turret",
+   "kind": "turret",
+   "width": 2,
+   "height": 2,
+   "item": "gun-turret",
+   "icon": "__base__/graphics/icons/gun-turret.png",
+   "wikiUrl": "https://wiki.factorio.com/Gun_turret"
+  },
   "heat-exchanger": {
    "name": "heat-exchanger",
    "displayName": "Heat exchanger",
@@ -9665,6 +9746,17 @@
    "energySource": "heat",
    "energyUsage": 10000000,
    "temperature": 500
+  },
+  "heat-pipe": {
+   "name": "heat-pipe",
+   "displayName": "Heat pipe",
+   "prototype": "heat-pipe",
+   "kind": "heat-pipe",
+   "width": 1,
+   "height": 1,
+   "item": "heat-pipe",
+   "icon": "__base__/graphics/icons/heat-pipe.png",
+   "wikiUrl": "https://wiki.factorio.com/Heat_pipe"
   },
   "inserter": {
    "name": "inserter",
@@ -9721,6 +9813,19 @@
     "utility-science-pack",
     "space-science-pack"
    ]
+  },
+  "laser-turret": {
+   "name": "laser-turret",
+   "displayName": "Laser turret",
+   "prototype": "electric-turret",
+   "kind": "turret",
+   "width": 2,
+   "height": 2,
+   "item": "laser-turret",
+   "icon": "__base__/graphics/icons/laser-turret.png",
+   "wikiUrl": "https://wiki.factorio.com/Laser_turret",
+   "energySource": "electric",
+   "drain": 24000
   },
   "locomotive": {
    "name": "locomotive",
@@ -9852,6 +9957,30 @@
    "wikiUrl": "https://wiki.factorio.com/Pipe_to_ground",
    "maxDistance": 10
   },
+  "power-switch": {
+   "name": "power-switch",
+   "displayName": "Power switch",
+   "prototype": "power-switch",
+   "kind": "circuit",
+   "width": 2,
+   "height": 2,
+   "item": "power-switch",
+   "icon": "__base__/graphics/icons/power-switch.png",
+   "wikiUrl": "https://wiki.factorio.com/Power_switch"
+  },
+  "programmable-speaker": {
+   "name": "programmable-speaker",
+   "displayName": "Programmable speaker",
+   "prototype": "programmable-speaker",
+   "kind": "circuit",
+   "width": 1,
+   "height": 1,
+   "item": "programmable-speaker",
+   "icon": "__base__/graphics/icons/programmable-speaker.png",
+   "wikiUrl": "https://wiki.factorio.com/Programmable_speaker",
+   "energySource": "electric",
+   "energyUsage": 2000
+  },
   "pump": {
    "name": "pump",
    "displayName": "Pump",
@@ -9891,6 +10020,19 @@
     "basic-fluid"
    ],
    "miningArea": 1
+  },
+  "radar": {
+   "name": "radar",
+   "displayName": "Radar",
+   "prototype": "radar",
+   "kind": "radar",
+   "width": 3,
+   "height": 3,
+   "item": "radar",
+   "icon": "__base__/graphics/icons/radar.png",
+   "wikiUrl": "https://wiki.factorio.com/Radar",
+   "energySource": "electric",
+   "energyUsage": 300000
   },
   "rail-chain-signal": {
    "name": "rail-chain-signal",
@@ -9966,6 +10108,19 @@
     "rocket-building"
    ]
   },
+  "selector-combinator": {
+   "name": "selector-combinator",
+   "displayName": "Selector combinator",
+   "prototype": "selector-combinator",
+   "kind": "combinator",
+   "width": 1,
+   "height": 2,
+   "item": "selector-combinator",
+   "icon": "__base__/graphics/icons/selector-combinator.png",
+   "wikiUrl": "https://wiki.factorio.com/Selector_combinator",
+   "energySource": "electric",
+   "energyUsage": 1000
+  },
   "small-electric-pole": {
    "name": "small-electric-pole",
    "displayName": "Small electric pole",
@@ -9978,6 +10133,19 @@
    "wikiUrl": "https://wiki.factorio.com/Small_electric_pole",
    "supplyAreaDistance": 2.5,
    "wireReach": 7.5
+  },
+  "small-lamp": {
+   "name": "small-lamp",
+   "displayName": "Small lamp",
+   "prototype": "lamp",
+   "kind": "lamp",
+   "width": 1,
+   "height": 1,
+   "item": "small-lamp",
+   "icon": "__base__/graphics/icons/small-lamp.png",
+   "wikiUrl": "https://wiki.factorio.com/Small_lamp",
+   "energySource": "electric",
+   "energyUsage": 5000
   },
   "solar-panel": {
    "name": "solar-panel",
@@ -10079,6 +10247,17 @@
    "categories": [
     "smelting"
    ]
+  },
+  "stone-wall": {
+   "name": "stone-wall",
+   "displayName": "Stone wall",
+   "prototype": "wall",
+   "kind": "wall",
+   "width": 1,
+   "height": 1,
+   "item": "stone-wall",
+   "icon": "__base__/graphics/icons/wall.png",
+   "wikiUrl": "https://wiki.factorio.com/Stone_wall"
   },
   "storage-chest": {
    "name": "storage-chest",
