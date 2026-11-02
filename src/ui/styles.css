@@ -82,3 +82,7 @@ table.grid th { background: var(--panel); }
 .research-actions .search { margin: 0; flex: 1; }
 .research-actions button { padding: 5px 10px; background: var(--panel-2); border: 1px solid var(--line); cursor: pointer; }
 .research-list { list-style: none; margin: 0; padding: 0; }
+.research-toggle + .research-toggle { margin-left: 0; }
+.icons-sample { display: flex; gap: 6px; margin: 8px 0; min-height: 32px; }
+.icons-sample img { background: var(--panel-2); border-radius: 3px; }
+.icons-panel code { font-size: 11px; word-break: break-all; }

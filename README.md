@@ -32,7 +32,13 @@ npm test
 ```
 
 The extractor reads the Lua files as text and never runs them. Types for the generated file are
-in `src/data/types.ts`. Icons are loaded from the Factorio wiki.
+in `src/data/types.ts`.
+
+Icons: Wube's terms don't allow redistributing the game's art, and factorio-data has no
+graphics, so the site ships no icons. The **Icons** button lets you pick your own Factorio
+install; the browser reads only the icon files listed in `nauvis.json` (`icon` paths), crops
+the full-size mip level and keeps them in IndexedDB (`src/data/icons.ts`). Nothing is
+uploaded. Until then, lists fall back to wiki images and the grid to coloured blocks.
 
 ## Layout
 

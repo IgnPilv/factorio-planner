@@ -2504,7 +2504,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "energy"
+   "subgroup": "energy",
+   "icon": "__base__/graphics/icons/accumulator.png"
   },
   "active-provider-chest": {
    "name": "active-provider-chest",
@@ -2540,7 +2541,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "logistic-network"
+   "subgroup": "logistic-network",
+   "icon": "__base__/graphics/icons/active-provider-chest.png"
   },
   "advanced-circuit": {
    "name": "advanced-circuit",
@@ -2576,7 +2578,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "intermediate-product"
+   "subgroup": "intermediate-product",
+   "icon": "__base__/graphics/icons/advanced-circuit.png"
   },
   "advanced-oil-processing": {
    "name": "advanced-oil-processing",
@@ -2618,7 +2621,8 @@
    "allowProductivity": true,
    "enabledByDefault": false,
    "subgroup": "fluid-recipes",
-   "order": "a[oil-processing]-b[advanced-oil-processing]"
+   "order": "a[oil-processing]-b[advanced-oil-processing]",
+   "icon": "__base__/graphics/icons/fluid/advanced-oil-processing.png"
   },
   "arithmetic-combinator": {
    "name": "arithmetic-combinator",
@@ -2649,7 +2653,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "circuit-network"
+   "subgroup": "circuit-network",
+   "icon": "__base__/graphics/icons/arithmetic-combinator.png"
   },
   "artillery-shell": {
    "name": "artillery-shell",
@@ -2685,7 +2690,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "ammo"
+   "subgroup": "ammo",
+   "icon": "__base__/graphics/icons/artillery-shell.png"
   },
   "artillery-turret": {
    "name": "artillery-turret",
@@ -2726,7 +2732,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "turret"
+   "subgroup": "turret",
+   "icon": "__base__/graphics/icons/artillery-turret.png"
   },
   "artillery-wagon": {
    "name": "artillery-wagon",
@@ -2772,7 +2779,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "train-transport"
+   "subgroup": "train-transport",
+   "icon": "__base__/graphics/icons/artillery-wagon.png"
   },
   "assembling-machine-1": {
    "name": "assembling-machine-1",
@@ -2808,7 +2816,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "production-machine"
+   "subgroup": "production-machine",
+   "icon": "__base__/graphics/icons/assembling-machine-1.png"
   },
   "assembling-machine-2": {
    "name": "assembling-machine-2",
@@ -2849,7 +2858,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "production-machine"
+   "subgroup": "production-machine",
+   "icon": "__base__/graphics/icons/assembling-machine-2.png"
   },
   "assembling-machine-3": {
    "name": "assembling-machine-3",
@@ -2880,7 +2890,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "production-machine"
+   "subgroup": "production-machine",
+   "icon": "__base__/graphics/icons/assembling-machine-3.png"
   },
   "atomic-bomb": {
    "name": "atomic-bomb",
@@ -2916,7 +2927,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "ammo"
+   "subgroup": "ammo",
+   "icon": "__base__/graphics/icons/atomic-bomb.png"
   },
   "automation-science-pack": {
    "name": "automation-science-pack",
@@ -2947,7 +2959,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "science-pack"
+   "subgroup": "science-pack",
+   "icon": "__base__/graphics/icons/automation-science-pack.png"
   },
   "barrel": {
    "name": "barrel",
@@ -2973,7 +2986,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "intermediate-product"
+   "subgroup": "intermediate-product",
+   "icon": "__base__/graphics/icons/fluid/barreling/empty-barrel.png"
   },
   "basic-oil-processing": {
    "name": "basic-oil-processing",
@@ -3000,7 +3014,8 @@
    "allowProductivity": true,
    "enabledByDefault": false,
    "subgroup": "fluid-recipes",
-   "order": "a[oil-processing]-a[basic-oil-processing]"
+   "order": "a[oil-processing]-a[basic-oil-processing]",
+   "icon": "__base__/graphics/icons/fluid/basic-oil-processing.png"
   },
   "battery": {
    "name": "battery",
@@ -3036,7 +3051,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "raw-material"
+   "subgroup": "raw-material",
+   "icon": "__base__/graphics/icons/battery.png"
   },
   "battery-equipment": {
    "name": "battery-equipment",
@@ -3067,7 +3083,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "equipment"
+   "subgroup": "equipment",
+   "icon": "__base__/graphics/icons/battery-equipment.png"
   },
   "battery-mk2-equipment": {
    "name": "battery-mk2-equipment",
@@ -3103,7 +3120,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "equipment"
+   "subgroup": "equipment",
+   "icon": "__base__/graphics/icons/battery-mk2-equipment.png"
   },
   "beacon": {
    "name": "beacon",
@@ -3144,7 +3162,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "module"
+   "subgroup": "module",
+   "icon": "__base__/graphics/icons/beacon.png"
   },
   "belt-immunity-equipment": {
    "name": "belt-immunity-equipment",
@@ -3175,7 +3194,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "utility-equipment"
+   "subgroup": "utility-equipment",
+   "icon": "__base__/graphics/icons/belt-immunity-equipment.png"
   },
   "big-electric-pole": {
    "name": "big-electric-pole",
@@ -3211,7 +3231,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "energy-pipe-distribution"
+   "subgroup": "energy-pipe-distribution",
+   "icon": "__base__/graphics/icons/big-electric-pole.png"
   },
   "boiler": {
    "name": "boiler",
@@ -3242,7 +3263,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "energy"
+   "subgroup": "energy",
+   "icon": "__base__/graphics/icons/boiler.png"
   },
   "buffer-chest": {
    "name": "buffer-chest",
@@ -3278,7 +3300,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "logistic-network"
+   "subgroup": "logistic-network",
+   "icon": "__base__/graphics/icons/buffer-chest.png"
   },
   "bulk-inserter": {
    "name": "bulk-inserter",
@@ -3319,7 +3342,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "inserter"
+   "subgroup": "inserter",
+   "icon": "__base__/graphics/icons/bulk-inserter.png"
   },
   "burner-inserter": {
    "name": "burner-inserter",
@@ -3350,7 +3374,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": true,
-   "subgroup": "inserter"
+   "subgroup": "inserter",
+   "icon": "__base__/graphics/icons/burner-inserter.png"
   },
   "burner-mining-drill": {
    "name": "burner-mining-drill",
@@ -3386,7 +3411,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": true,
-   "subgroup": "extraction-machine"
+   "subgroup": "extraction-machine",
+   "icon": "__base__/graphics/icons/burner-mining-drill.png"
   },
   "cannon-shell": {
    "name": "cannon-shell",
@@ -3422,7 +3448,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "ammo"
+   "subgroup": "ammo",
+   "icon": "__base__/graphics/icons/cannon-shell.png"
   },
   "car": {
    "name": "car",
@@ -3458,7 +3485,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "transport"
+   "subgroup": "transport",
+   "icon": "__base__/graphics/icons/car.png"
   },
   "cargo-landing-pad": {
    "name": "cargo-landing-pad",
@@ -3494,7 +3522,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "space-related"
+   "subgroup": "space-related",
+   "icon": "__base__/graphics/icons/cargo-landing-pad.png"
   },
   "cargo-wagon": {
    "name": "cargo-wagon",
@@ -3530,7 +3559,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "train-transport"
+   "subgroup": "train-transport",
+   "icon": "__base__/graphics/icons/cargo-wagon.png"
   },
   "centrifuge": {
    "name": "centrifuge",
@@ -3571,7 +3601,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "production-machine"
+   "subgroup": "production-machine",
+   "icon": "__base__/graphics/icons/centrifuge.png"
   },
   "chemical-plant": {
    "name": "chemical-plant",
@@ -3612,7 +3643,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "production-machine"
+   "subgroup": "production-machine",
+   "icon": "__base__/graphics/icons/chemical-plant.png"
   },
   "chemical-science-pack": {
    "name": "chemical-science-pack",
@@ -3648,7 +3680,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "science-pack"
+   "subgroup": "science-pack",
+   "icon": "__base__/graphics/icons/chemical-science-pack.png"
   },
   "cliff-explosives": {
    "name": "cliff-explosives",
@@ -3684,7 +3717,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "terrain"
+   "subgroup": "terrain",
+   "icon": "__base__/graphics/icons/cliff-explosives.png"
   },
   "cluster-grenade": {
    "name": "cluster-grenade",
@@ -3720,7 +3754,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "capsule"
+   "subgroup": "capsule",
+   "icon": "__base__/graphics/icons/cluster-grenade.png"
   },
   "coal-liquefaction": {
    "name": "coal-liquefaction",
@@ -3768,7 +3803,8 @@
    "allowProductivity": true,
    "enabledByDefault": false,
    "subgroup": "fluid-recipes",
-   "order": "a[oil-processing]-c[coal-liquefaction]"
+   "order": "a[oil-processing]-c[coal-liquefaction]",
+   "icon": "__base__/graphics/icons/fluid/coal-liquefaction.png"
   },
   "combat-shotgun": {
    "name": "combat-shotgun",
@@ -3809,7 +3845,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "gun"
+   "subgroup": "gun",
+   "icon": "__base__/graphics/icons/combat-shotgun.png"
   },
   "concrete": {
    "name": "concrete",
@@ -3845,7 +3882,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "terrain"
+   "subgroup": "terrain",
+   "icon": "__base__/graphics/icons/concrete.png"
   },
   "constant-combinator": {
    "name": "constant-combinator",
@@ -3876,7 +3914,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "circuit-network"
+   "subgroup": "circuit-network",
+   "icon": "__base__/graphics/icons/constant-combinator.png"
   },
   "construction-robot": {
    "name": "construction-robot",
@@ -3907,7 +3946,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "logistic-network"
+   "subgroup": "logistic-network",
+   "icon": "__base__/graphics/icons/construction-robot.png"
   },
   "copper-cable": {
    "name": "copper-cable",
@@ -3933,7 +3973,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "intermediate-product"
+   "subgroup": "intermediate-product",
+   "icon": "__base__/graphics/icons/copper-cable.png"
   },
   "copper-plate": {
    "name": "copper-plate",
@@ -3959,7 +4000,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": true,
-   "subgroup": "raw-material"
+   "subgroup": "raw-material",
+   "icon": "__base__/graphics/icons/copper-plate.png"
   },
   "decider-combinator": {
    "name": "decider-combinator",
@@ -3990,7 +4032,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "circuit-network"
+   "subgroup": "circuit-network",
+   "icon": "__base__/graphics/icons/decider-combinator.png"
   },
   "defender-capsule": {
    "name": "defender-capsule",
@@ -4026,7 +4069,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "capsule"
+   "subgroup": "capsule",
+   "icon": "__base__/graphics/icons/defender-capsule.png"
   },
   "destroyer-capsule": {
    "name": "destroyer-capsule",
@@ -4057,7 +4101,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "capsule"
+   "subgroup": "capsule",
+   "icon": "__base__/graphics/icons/destroyer-capsule.png"
   },
   "discharge-defense-equipment": {
    "name": "discharge-defense-equipment",
@@ -4093,7 +4138,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "military-equipment"
+   "subgroup": "military-equipment",
+   "icon": "__base__/graphics/icons/discharge-defense-equipment.png"
   },
   "display-panel": {
    "name": "display-panel",
@@ -4124,7 +4170,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "circuit-network"
+   "subgroup": "circuit-network",
+   "icon": "__base__/graphics/icons/display-panel.png"
   },
   "distractor-capsule": {
    "name": "distractor-capsule",
@@ -4155,7 +4202,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "capsule"
+   "subgroup": "capsule",
+   "icon": "__base__/graphics/icons/distractor-capsule.png"
   },
   "efficiency-module": {
    "name": "efficiency-module",
@@ -4186,7 +4234,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "module"
+   "subgroup": "module",
+   "icon": "__base__/graphics/icons/efficiency-module.png"
   },
   "efficiency-module-2": {
    "name": "efficiency-module-2",
@@ -4222,7 +4271,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "module"
+   "subgroup": "module",
+   "icon": "__base__/graphics/icons/efficiency-module-2.png"
   },
   "efficiency-module-3": {
    "name": "efficiency-module-3",
@@ -4258,7 +4308,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "module"
+   "subgroup": "module",
+   "icon": "__base__/graphics/icons/efficiency-module-3.png"
   },
   "electric-engine-unit": {
    "name": "electric-engine-unit",
@@ -4294,7 +4345,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "intermediate-product"
+   "subgroup": "intermediate-product",
+   "icon": "__base__/graphics/icons/electric-engine-unit.png"
   },
   "electric-furnace": {
    "name": "electric-furnace",
@@ -4330,7 +4382,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "smelting-machine"
+   "subgroup": "smelting-machine",
+   "icon": "__base__/graphics/icons/electric-furnace.png"
   },
   "electric-mining-drill": {
    "name": "electric-mining-drill",
@@ -4366,7 +4419,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "extraction-machine"
+   "subgroup": "extraction-machine",
+   "icon": "__base__/graphics/icons/electric-mining-drill.png"
   },
   "electronic-circuit": {
    "name": "electronic-circuit",
@@ -4397,7 +4451,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "intermediate-product"
+   "subgroup": "intermediate-product",
+   "icon": "__base__/graphics/icons/electronic-circuit.png"
   },
   "energy-shield-equipment": {
    "name": "energy-shield-equipment",
@@ -4428,7 +4483,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "military-equipment"
+   "subgroup": "military-equipment",
+   "icon": "__base__/graphics/icons/energy-shield-equipment.png"
   },
   "energy-shield-mk2-equipment": {
    "name": "energy-shield-mk2-equipment",
@@ -4464,7 +4520,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "military-equipment"
+   "subgroup": "military-equipment",
+   "icon": "__base__/graphics/icons/energy-shield-mk2-equipment.png"
   },
   "engine-unit": {
    "name": "engine-unit",
@@ -4500,7 +4557,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "intermediate-product"
+   "subgroup": "intermediate-product",
+   "icon": "__base__/graphics/icons/engine-unit.png"
   },
   "exoskeleton-equipment": {
    "name": "exoskeleton-equipment",
@@ -4536,7 +4594,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "utility-equipment"
+   "subgroup": "utility-equipment",
+   "icon": "__base__/graphics/icons/exoskeleton-equipment.png"
   },
   "explosive-cannon-shell": {
    "name": "explosive-cannon-shell",
@@ -4572,7 +4631,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "ammo"
+   "subgroup": "ammo",
+   "icon": "__base__/graphics/icons/explosive-cannon-shell.png"
   },
   "explosive-rocket": {
    "name": "explosive-rocket",
@@ -4603,7 +4663,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "ammo"
+   "subgroup": "ammo",
+   "icon": "__base__/graphics/icons/explosive-rocket.png"
   },
   "explosive-uranium-cannon-shell": {
    "name": "explosive-uranium-cannon-shell",
@@ -4634,7 +4695,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "ammo"
+   "subgroup": "ammo",
+   "icon": "__base__/graphics/icons/explosive-uranium-cannon-shell.png"
   },
   "explosives": {
    "name": "explosives",
@@ -4670,7 +4732,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "raw-material"
+   "subgroup": "raw-material",
+   "icon": "__base__/graphics/icons/explosives.png"
   },
   "express-splitter": {
    "name": "express-splitter",
@@ -4711,7 +4774,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "belt"
+   "subgroup": "belt",
+   "icon": "__base__/graphics/icons/express-splitter.png"
   },
   "express-transport-belt": {
    "name": "express-transport-belt",
@@ -4747,7 +4811,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "belt"
+   "subgroup": "belt",
+   "icon": "__base__/graphics/icons/express-transport-belt.png"
   },
   "express-underground-belt": {
    "name": "express-underground-belt",
@@ -4783,7 +4848,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "belt"
+   "subgroup": "belt",
+   "icon": "__base__/graphics/icons/express-underground-belt.png"
   },
   "fast-inserter": {
    "name": "fast-inserter",
@@ -4819,7 +4885,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "inserter"
+   "subgroup": "inserter",
+   "icon": "__base__/graphics/icons/fast-inserter.png"
   },
   "fast-splitter": {
    "name": "fast-splitter",
@@ -4855,7 +4922,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "belt"
+   "subgroup": "belt",
+   "icon": "__base__/graphics/icons/fast-splitter.png"
   },
   "fast-transport-belt": {
    "name": "fast-transport-belt",
@@ -4886,7 +4954,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "belt"
+   "subgroup": "belt",
+   "icon": "__base__/graphics/icons/fast-transport-belt.png"
   },
   "fast-underground-belt": {
    "name": "fast-underground-belt",
@@ -4917,7 +4986,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "belt"
+   "subgroup": "belt",
+   "icon": "__base__/graphics/icons/fast-underground-belt.png"
   },
   "firearm-magazine": {
    "name": "firearm-magazine",
@@ -4943,7 +5013,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": true,
-   "subgroup": "ammo"
+   "subgroup": "ammo",
+   "icon": "__base__/graphics/icons/firearm-magazine.png"
   },
   "fission-reactor-equipment": {
    "name": "fission-reactor-equipment",
@@ -4979,7 +5050,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "equipment"
+   "subgroup": "equipment",
+   "icon": "__base__/graphics/icons/fission-reactor-equipment.png"
   },
   "flamethrower": {
    "name": "flamethrower",
@@ -5010,7 +5082,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "gun"
+   "subgroup": "gun",
+   "icon": "__base__/graphics/icons/flamethrower.png"
   },
   "flamethrower-ammo": {
    "name": "flamethrower-ammo",
@@ -5041,7 +5114,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "ammo"
+   "subgroup": "ammo",
+   "icon": "__base__/graphics/icons/flamethrower-ammo.png"
   },
   "flamethrower-turret": {
    "name": "flamethrower-turret",
@@ -5082,7 +5156,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "turret"
+   "subgroup": "turret",
+   "icon": "__base__/graphics/icons/flamethrower-turret.png"
   },
   "fluid-wagon": {
    "name": "fluid-wagon",
@@ -5123,7 +5198,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "train-transport"
+   "subgroup": "train-transport",
+   "icon": "__base__/graphics/icons/fluid-wagon.png"
   },
   "flying-robot-frame": {
    "name": "flying-robot-frame",
@@ -5164,7 +5240,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "intermediate-product"
+   "subgroup": "intermediate-product",
+   "icon": "__base__/graphics/icons/flying-robot-frame.png"
   },
   "gate": {
    "name": "gate",
@@ -5200,7 +5277,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "defensive-structure"
+   "subgroup": "defensive-structure",
+   "icon": "__base__/graphics/icons/gate.png"
   },
   "grenade": {
    "name": "grenade",
@@ -5231,7 +5309,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "capsule"
+   "subgroup": "capsule",
+   "icon": "__base__/graphics/icons/grenade.png"
   },
   "gun-turret": {
    "name": "gun-turret",
@@ -5267,7 +5346,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "turret"
+   "subgroup": "turret",
+   "icon": "__base__/graphics/icons/gun-turret.png"
   },
   "hazard-concrete": {
    "name": "hazard-concrete",
@@ -5293,7 +5373,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "terrain"
+   "subgroup": "terrain",
+   "icon": "__base__/graphics/icons/hazard-concrete.png"
   },
   "heat-exchanger": {
    "name": "heat-exchanger",
@@ -5329,7 +5410,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "energy"
+   "subgroup": "energy",
+   "icon": "__base__/graphics/icons/heat-boiler.png"
   },
   "heat-pipe": {
    "name": "heat-pipe",
@@ -5360,7 +5442,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "energy"
+   "subgroup": "energy",
+   "icon": "__base__/graphics/icons/heat-pipe.png"
   },
   "heavy-armor": {
    "name": "heavy-armor",
@@ -5391,7 +5474,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "armor"
+   "subgroup": "armor",
+   "icon": "__base__/graphics/icons/heavy-armor.png"
   },
   "heavy-oil-cracking": {
    "name": "heavy-oil-cracking",
@@ -5423,7 +5507,8 @@
    "allowProductivity": true,
    "enabledByDefault": false,
    "subgroup": "fluid-recipes",
-   "order": "b[fluid-chemistry]-a[heavy-oil-cracking]"
+   "order": "b[fluid-chemistry]-a[heavy-oil-cracking]",
+   "icon": "__base__/graphics/icons/fluid/heavy-oil-cracking.png"
   },
   "inserter": {
    "name": "inserter",
@@ -5459,7 +5544,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "inserter"
+   "subgroup": "inserter",
+   "icon": "__base__/graphics/icons/inserter.png"
   },
   "iron-chest": {
    "name": "iron-chest",
@@ -5485,7 +5571,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": true,
-   "subgroup": "storage"
+   "subgroup": "storage",
+   "icon": "__base__/graphics/icons/iron-chest.png"
   },
   "iron-gear-wheel": {
    "name": "iron-gear-wheel",
@@ -5511,7 +5598,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": true,
-   "subgroup": "intermediate-product"
+   "subgroup": "intermediate-product",
+   "icon": "__base__/graphics/icons/iron-gear-wheel.png"
   },
   "iron-plate": {
    "name": "iron-plate",
@@ -5537,7 +5625,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": true,
-   "subgroup": "raw-material"
+   "subgroup": "raw-material",
+   "icon": "__base__/graphics/icons/iron-plate.png"
   },
   "iron-stick": {
    "name": "iron-stick",
@@ -5563,7 +5652,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "intermediate-product"
+   "subgroup": "intermediate-product",
+   "icon": "__base__/graphics/icons/iron-stick.png"
   },
   "kovarex-enrichment-process": {
    "name": "kovarex-enrichment-process",
@@ -5602,7 +5692,8 @@
    "allowProductivity": true,
    "enabledByDefault": false,
    "subgroup": "uranium-processing",
-   "order": "b[uranium-products]-c[kovarex-enrichment-process]"
+   "order": "b[uranium-products]-c[kovarex-enrichment-process]",
+   "icon": "__base__/graphics/icons/kovarex-enrichment-process.png"
   },
   "lab": {
    "name": "lab",
@@ -5638,7 +5729,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "production-machine"
+   "subgroup": "production-machine",
+   "icon": "__base__/graphics/icons/lab.png"
   },
   "land-mine": {
    "name": "land-mine",
@@ -5669,7 +5761,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "defensive-structure"
+   "subgroup": "defensive-structure",
+   "icon": "__base__/graphics/icons/land-mine.png"
   },
   "landfill": {
    "name": "landfill",
@@ -5695,7 +5788,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "terrain"
+   "subgroup": "terrain",
+   "icon": "__base__/graphics/icons/landfill.png"
   },
   "laser-turret": {
    "name": "laser-turret",
@@ -5731,7 +5825,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "turret"
+   "subgroup": "turret",
+   "icon": "__base__/graphics/icons/laser-turret.png"
   },
   "light-armor": {
    "name": "light-armor",
@@ -5757,7 +5852,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": true,
-   "subgroup": "armor"
+   "subgroup": "armor",
+   "icon": "__base__/graphics/icons/light-armor.png"
   },
   "light-oil-cracking": {
    "name": "light-oil-cracking",
@@ -5789,7 +5885,8 @@
    "allowProductivity": true,
    "enabledByDefault": false,
    "subgroup": "fluid-recipes",
-   "order": "b[fluid-chemistry]-b[light-oil-cracking]"
+   "order": "b[fluid-chemistry]-b[light-oil-cracking]",
+   "icon": "__base__/graphics/icons/fluid/light-oil-cracking.png"
   },
   "locomotive": {
    "name": "locomotive",
@@ -5825,7 +5922,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "train-transport"
+   "subgroup": "train-transport",
+   "icon": "__base__/graphics/icons/locomotive.png"
   },
   "logistic-robot": {
    "name": "logistic-robot",
@@ -5856,7 +5954,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "logistic-network"
+   "subgroup": "logistic-network",
+   "icon": "__base__/graphics/icons/logistic-robot.png"
   },
   "logistic-science-pack": {
    "name": "logistic-science-pack",
@@ -5887,7 +5986,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "science-pack"
+   "subgroup": "science-pack",
+   "icon": "__base__/graphics/icons/logistic-science-pack.png"
   },
   "long-handed-inserter": {
    "name": "long-handed-inserter",
@@ -5923,7 +6023,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "inserter"
+   "subgroup": "inserter",
+   "icon": "__base__/graphics/icons/long-handed-inserter.png"
   },
   "low-density-structure": {
    "name": "low-density-structure",
@@ -5959,7 +6060,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "intermediate-product"
+   "subgroup": "intermediate-product",
+   "icon": "__base__/graphics/icons/low-density-structure.png"
   },
   "lubricant": {
    "name": "lubricant",
@@ -5986,7 +6088,8 @@
    "allowProductivity": true,
    "enabledByDefault": false,
    "subgroup": "fluid-recipes",
-   "order": "c[oil-products]-a[lubricant]"
+   "order": "c[oil-products]-a[lubricant]",
+   "icon": "__base__/graphics/icons/fluid/lubricant.png"
   },
   "medium-electric-pole": {
    "name": "medium-electric-pole",
@@ -6022,7 +6125,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "energy-pipe-distribution"
+   "subgroup": "energy-pipe-distribution",
+   "icon": "__base__/graphics/icons/medium-electric-pole.png"
   },
   "military-science-pack": {
    "name": "military-science-pack",
@@ -6058,7 +6162,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "science-pack"
+   "subgroup": "science-pack",
+   "icon": "__base__/graphics/icons/military-science-pack.png"
   },
   "modular-armor": {
    "name": "modular-armor",
@@ -6089,7 +6194,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "armor"
+   "subgroup": "armor",
+   "icon": "__base__/graphics/icons/modular-armor.png"
   },
   "night-vision-equipment": {
    "name": "night-vision-equipment",
@@ -6120,7 +6226,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "utility-equipment"
+   "subgroup": "utility-equipment",
+   "icon": "__base__/graphics/icons/night-vision-equipment.png"
   },
   "nuclear-fuel": {
    "name": "nuclear-fuel",
@@ -6152,7 +6259,8 @@
    "allowProductivity": true,
    "enabledByDefault": false,
    "subgroup": "uranium-processing",
-   "order": "b[uranium-products]-d[nuclear-fuel]"
+   "order": "b[uranium-products]-d[nuclear-fuel]",
+   "icon": "__base__/graphics/icons/nuclear-fuel.png"
   },
   "nuclear-fuel-reprocessing": {
    "name": "nuclear-fuel-reprocessing",
@@ -6179,7 +6287,8 @@
    "allowProductivity": true,
    "enabledByDefault": false,
    "subgroup": "uranium-processing",
-   "order": "b[uranium-products]-b[nuclear-fuel-reprocessing]"
+   "order": "b[uranium-products]-b[nuclear-fuel-reprocessing]",
+   "icon": "__base__/graphics/icons/nuclear-fuel-reprocessing.png"
   },
   "nuclear-reactor": {
    "name": "nuclear-reactor",
@@ -6220,7 +6329,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "energy"
+   "subgroup": "energy",
+   "icon": "__base__/graphics/icons/nuclear-reactor.png"
   },
   "offshore-pump": {
    "name": "offshore-pump",
@@ -6251,7 +6361,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "extraction-machine"
+   "subgroup": "extraction-machine",
+   "icon": "__base__/graphics/icons/offshore-pump.png"
   },
   "oil-refinery": {
    "name": "oil-refinery",
@@ -6297,7 +6408,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "production-machine"
+   "subgroup": "production-machine",
+   "icon": "__base__/graphics/icons/oil-refinery.png"
   },
   "passive-provider-chest": {
    "name": "passive-provider-chest",
@@ -6333,7 +6445,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "logistic-network"
+   "subgroup": "logistic-network",
+   "icon": "__base__/graphics/icons/passive-provider-chest.png"
   },
   "personal-laser-defense-equipment": {
    "name": "personal-laser-defense-equipment",
@@ -6369,7 +6482,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "military-equipment"
+   "subgroup": "military-equipment",
+   "icon": "__base__/graphics/icons/personal-laser-defense-equipment.png"
   },
   "personal-roboport-equipment": {
    "name": "personal-roboport-equipment",
@@ -6410,7 +6524,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "utility-equipment"
+   "subgroup": "utility-equipment",
+   "icon": "__base__/graphics/icons/personal-roboport-equipment.png"
   },
   "personal-roboport-mk2-equipment": {
    "name": "personal-roboport-mk2-equipment",
@@ -6446,7 +6561,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "utility-equipment"
+   "subgroup": "utility-equipment",
+   "icon": "__base__/graphics/icons/personal-roboport-mk2-equipment.png"
   },
   "piercing-rounds-magazine": {
    "name": "piercing-rounds-magazine",
@@ -6482,7 +6598,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "ammo"
+   "subgroup": "ammo",
+   "icon": "__base__/graphics/icons/piercing-rounds-magazine.png"
   },
   "piercing-shotgun-shell": {
    "name": "piercing-shotgun-shell",
@@ -6518,7 +6635,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "ammo"
+   "subgroup": "ammo",
+   "icon": "__base__/graphics/icons/piercing-shotgun-shell.png"
   },
   "pipe": {
    "name": "pipe",
@@ -6544,7 +6662,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "energy-pipe-distribution"
+   "subgroup": "energy-pipe-distribution",
+   "icon": "__base__/graphics/icons/pipe.png"
   },
   "pipe-to-ground": {
    "name": "pipe-to-ground",
@@ -6575,7 +6694,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "energy-pipe-distribution"
+   "subgroup": "energy-pipe-distribution",
+   "icon": "__base__/graphics/icons/pipe-to-ground.png"
   },
   "plastic-bar": {
    "name": "plastic-bar",
@@ -6606,7 +6726,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "raw-material"
+   "subgroup": "raw-material",
+   "icon": "__base__/graphics/icons/plastic-bar.png"
   },
   "poison-capsule": {
    "name": "poison-capsule",
@@ -6642,7 +6763,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "capsule"
+   "subgroup": "capsule",
+   "icon": "__base__/graphics/icons/poison-capsule.png"
   },
   "power-armor": {
    "name": "power-armor",
@@ -6678,7 +6800,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "armor"
+   "subgroup": "armor",
+   "icon": "__base__/graphics/icons/power-armor.png"
   },
   "power-armor-mk2": {
    "name": "power-armor-mk2",
@@ -6724,7 +6847,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "armor"
+   "subgroup": "armor",
+   "icon": "__base__/graphics/icons/power-armor-mk2.png"
   },
   "power-switch": {
    "name": "power-switch",
@@ -6760,7 +6884,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "circuit-network"
+   "subgroup": "circuit-network",
+   "icon": "__base__/graphics/icons/power-switch.png"
   },
   "processing-unit": {
    "name": "processing-unit",
@@ -6796,7 +6921,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "intermediate-product"
+   "subgroup": "intermediate-product",
+   "icon": "__base__/graphics/icons/processing-unit.png"
   },
   "production-science-pack": {
    "name": "production-science-pack",
@@ -6832,7 +6958,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "science-pack"
+   "subgroup": "science-pack",
+   "icon": "__base__/graphics/icons/production-science-pack.png"
   },
   "productivity-module": {
    "name": "productivity-module",
@@ -6863,7 +6990,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "module"
+   "subgroup": "module",
+   "icon": "__base__/graphics/icons/productivity-module.png"
   },
   "productivity-module-2": {
    "name": "productivity-module-2",
@@ -6899,7 +7027,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "module"
+   "subgroup": "module",
+   "icon": "__base__/graphics/icons/productivity-module-2.png"
   },
   "productivity-module-3": {
    "name": "productivity-module-3",
@@ -6935,7 +7064,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "module"
+   "subgroup": "module",
+   "icon": "__base__/graphics/icons/productivity-module-3.png"
   },
   "programmable-speaker": {
    "name": "programmable-speaker",
@@ -6976,7 +7106,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "circuit-network"
+   "subgroup": "circuit-network",
+   "icon": "__base__/graphics/icons/programmable-speaker.png"
   },
   "pump": {
    "name": "pump",
@@ -7012,7 +7143,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "energy-pipe-distribution"
+   "subgroup": "energy-pipe-distribution",
+   "icon": "__base__/graphics/icons/pump.png"
   },
   "pumpjack": {
    "name": "pumpjack",
@@ -7053,7 +7185,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "extraction-machine"
+   "subgroup": "extraction-machine",
+   "icon": "__base__/graphics/icons/pumpjack.png"
   },
   "radar": {
    "name": "radar",
@@ -7089,7 +7222,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "defensive-structure"
+   "subgroup": "defensive-structure",
+   "icon": "__base__/graphics/icons/radar.png"
   },
   "rail": {
    "name": "rail",
@@ -7125,7 +7259,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "train-transport"
+   "subgroup": "train-transport",
+   "icon": "__base__/graphics/icons/rail.png"
   },
   "rail-chain-signal": {
    "name": "rail-chain-signal",
@@ -7156,7 +7291,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "train-transport"
+   "subgroup": "train-transport",
+   "icon": "__base__/graphics/icons/rail-chain-signal.png"
   },
   "rail-signal": {
    "name": "rail-signal",
@@ -7187,7 +7323,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "train-transport"
+   "subgroup": "train-transport",
+   "icon": "__base__/graphics/icons/rail-signal.png"
   },
   "refined-concrete": {
    "name": "refined-concrete",
@@ -7228,7 +7365,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "terrain"
+   "subgroup": "terrain",
+   "icon": "__base__/graphics/icons/refined-concrete.png"
   },
   "refined-hazard-concrete": {
    "name": "refined-hazard-concrete",
@@ -7254,7 +7392,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "terrain"
+   "subgroup": "terrain",
+   "icon": "__base__/graphics/icons/refined-hazard-concrete.png"
   },
   "repair-pack": {
    "name": "repair-pack",
@@ -7285,7 +7424,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "tool"
+   "subgroup": "tool",
+   "icon": "__base__/graphics/icons/repair-pack.png"
   },
   "requester-chest": {
    "name": "requester-chest",
@@ -7321,7 +7461,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "logistic-network"
+   "subgroup": "logistic-network",
+   "icon": "__base__/graphics/icons/requester-chest.png"
   },
   "roboport": {
    "name": "roboport",
@@ -7357,7 +7498,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "logistic-network"
+   "subgroup": "logistic-network",
+   "icon": "__base__/graphics/icons/roboport.png"
   },
   "rocket": {
    "name": "rocket",
@@ -7388,7 +7530,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "ammo"
+   "subgroup": "ammo",
+   "icon": "__base__/graphics/icons/rocket.png"
   },
   "rocket-fuel": {
    "name": "rocket-fuel",
@@ -7419,7 +7562,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "intermediate-product"
+   "subgroup": "intermediate-product",
+   "icon": "__base__/graphics/icons/rocket-fuel.png"
   },
   "rocket-launcher": {
    "name": "rocket-launcher",
@@ -7455,7 +7599,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "gun"
+   "subgroup": "gun",
+   "icon": "__base__/graphics/icons/rocket-launcher.png"
   },
   "rocket-part": {
    "name": "rocket-part",
@@ -7491,7 +7636,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "intermediate-product"
+   "subgroup": "intermediate-product",
+   "icon": "__base__/graphics/icons/rocket-part.png"
   },
   "rocket-silo": {
    "name": "rocket-silo",
@@ -7537,7 +7683,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "space-related"
+   "subgroup": "space-related",
+   "icon": "__base__/graphics/icons/rocket-silo.png"
   },
   "satellite": {
    "name": "satellite",
@@ -7588,7 +7735,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "space-related"
+   "subgroup": "space-related",
+   "icon": "__base__/graphics/icons/satellite.png"
   },
   "selector-combinator": {
    "name": "selector-combinator",
@@ -7619,7 +7767,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "circuit-network"
+   "subgroup": "circuit-network",
+   "icon": "__base__/graphics/icons/selector-combinator.png"
   },
   "shotgun": {
    "name": "shotgun",
@@ -7660,7 +7809,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "gun"
+   "subgroup": "gun",
+   "icon": "__base__/graphics/icons/shotgun.png"
   },
   "shotgun-shell": {
    "name": "shotgun-shell",
@@ -7691,7 +7841,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "ammo"
+   "subgroup": "ammo",
+   "icon": "__base__/graphics/icons/shotgun-shell.png"
   },
   "slowdown-capsule": {
    "name": "slowdown-capsule",
@@ -7727,7 +7878,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "capsule"
+   "subgroup": "capsule",
+   "icon": "__base__/graphics/icons/slowdown-capsule.png"
   },
   "small-electric-pole": {
    "name": "small-electric-pole",
@@ -7758,7 +7910,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "energy-pipe-distribution"
+   "subgroup": "energy-pipe-distribution",
+   "icon": "__base__/graphics/icons/small-electric-pole.png"
   },
   "small-lamp": {
    "name": "small-lamp",
@@ -7794,7 +7947,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "circuit-network"
+   "subgroup": "circuit-network",
+   "icon": "__base__/graphics/icons/small-lamp.png"
   },
   "solar-panel": {
    "name": "solar-panel",
@@ -7830,7 +7984,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "energy"
+   "subgroup": "energy",
+   "icon": "__base__/graphics/icons/solar-panel.png"
   },
   "solar-panel-equipment": {
    "name": "solar-panel-equipment",
@@ -7866,7 +8021,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "equipment"
+   "subgroup": "equipment",
+   "icon": "__base__/graphics/icons/solar-panel-equipment.png"
   },
   "solid-fuel-from-heavy-oil": {
    "name": "solid-fuel-from-heavy-oil",
@@ -7893,7 +8049,8 @@
    "allowProductivity": true,
    "enabledByDefault": false,
    "subgroup": "fluid-recipes",
-   "order": "b[fluid-chemistry]-e[solid-fuel-from-heavy-oil]"
+   "order": "b[fluid-chemistry]-e[solid-fuel-from-heavy-oil]",
+   "icon": "__base__/graphics/icons/solid-fuel-from-heavy-oil.png"
   },
   "solid-fuel-from-light-oil": {
    "name": "solid-fuel-from-light-oil",
@@ -7920,7 +8077,8 @@
    "allowProductivity": true,
    "enabledByDefault": false,
    "subgroup": "fluid-recipes",
-   "order": "b[fluid-chemistry]-d[solid-fuel-from-light-oil]"
+   "order": "b[fluid-chemistry]-d[solid-fuel-from-light-oil]",
+   "icon": "__base__/graphics/icons/solid-fuel-from-light-oil.png"
   },
   "solid-fuel-from-petroleum-gas": {
    "name": "solid-fuel-from-petroleum-gas",
@@ -7947,7 +8105,8 @@
    "allowProductivity": true,
    "enabledByDefault": false,
    "subgroup": "fluid-recipes",
-   "order": "b[fluid-chemistry]-c[solid-fuel-from-petroleum-gas]"
+   "order": "b[fluid-chemistry]-c[solid-fuel-from-petroleum-gas]",
+   "icon": "__base__/graphics/icons/solid-fuel-from-petroleum-gas.png"
   },
   "speed-module": {
    "name": "speed-module",
@@ -7978,7 +8137,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "module"
+   "subgroup": "module",
+   "icon": "__base__/graphics/icons/speed-module.png"
   },
   "speed-module-2": {
    "name": "speed-module-2",
@@ -8014,7 +8174,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "module"
+   "subgroup": "module",
+   "icon": "__base__/graphics/icons/speed-module-2.png"
   },
   "speed-module-3": {
    "name": "speed-module-3",
@@ -8050,7 +8211,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "module"
+   "subgroup": "module",
+   "icon": "__base__/graphics/icons/speed-module-3.png"
   },
   "spidertron": {
    "name": "spidertron",
@@ -8111,7 +8273,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "transport"
+   "subgroup": "transport",
+   "icon": "__base__/graphics/icons/spidertron.png"
   },
   "splitter": {
    "name": "splitter",
@@ -8147,7 +8310,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "belt"
+   "subgroup": "belt",
+   "icon": "__base__/graphics/icons/splitter.png"
   },
   "steam-engine": {
    "name": "steam-engine",
@@ -8183,7 +8347,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "energy"
+   "subgroup": "energy",
+   "icon": "__base__/graphics/icons/steam-engine.png"
   },
   "steam-turbine": {
    "name": "steam-turbine",
@@ -8219,7 +8384,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "energy"
+   "subgroup": "energy",
+   "icon": "__base__/graphics/icons/steam-turbine.png"
   },
   "steel-chest": {
    "name": "steel-chest",
@@ -8245,7 +8411,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "storage"
+   "subgroup": "storage",
+   "icon": "__base__/graphics/icons/steel-chest.png"
   },
   "steel-furnace": {
    "name": "steel-furnace",
@@ -8276,7 +8443,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "smelting-machine"
+   "subgroup": "smelting-machine",
+   "icon": "__base__/graphics/icons/steel-furnace.png"
   },
   "steel-plate": {
    "name": "steel-plate",
@@ -8302,7 +8470,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "raw-material"
+   "subgroup": "raw-material",
+   "icon": "__base__/graphics/icons/steel-plate.png"
   },
   "stone-brick": {
    "name": "stone-brick",
@@ -8328,7 +8497,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": true,
-   "subgroup": "terrain"
+   "subgroup": "terrain",
+   "icon": "__base__/graphics/icons/stone-brick.png"
   },
   "stone-furnace": {
    "name": "stone-furnace",
@@ -8354,7 +8524,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": true,
-   "subgroup": "smelting-machine"
+   "subgroup": "smelting-machine",
+   "icon": "__base__/graphics/icons/stone-furnace.png"
   },
   "stone-wall": {
    "name": "stone-wall",
@@ -8380,7 +8551,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "defensive-structure"
+   "subgroup": "defensive-structure",
+   "icon": "__base__/graphics/icons/wall.png"
   },
   "storage-chest": {
    "name": "storage-chest",
@@ -8416,7 +8588,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "logistic-network"
+   "subgroup": "logistic-network",
+   "icon": "__base__/graphics/icons/storage-chest.png"
   },
   "storage-tank": {
    "name": "storage-tank",
@@ -8447,7 +8620,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "storage"
+   "subgroup": "storage",
+   "icon": "__base__/graphics/icons/storage-tank.png"
   },
   "submachine-gun": {
    "name": "submachine-gun",
@@ -8483,7 +8657,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "gun"
+   "subgroup": "gun",
+   "icon": "__base__/graphics/icons/submachine-gun.png"
   },
   "substation": {
    "name": "substation",
@@ -8519,7 +8694,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "energy-pipe-distribution"
+   "subgroup": "energy-pipe-distribution",
+   "icon": "__base__/graphics/icons/substation.png"
   },
   "sulfur": {
    "name": "sulfur",
@@ -8550,7 +8726,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "raw-material"
+   "subgroup": "raw-material",
+   "icon": "__base__/graphics/icons/sulfur.png"
   },
   "sulfuric-acid": {
    "name": "sulfuric-acid",
@@ -8587,7 +8764,8 @@
    "allowProductivity": true,
    "enabledByDefault": false,
    "subgroup": "fluid-recipes",
-   "order": "c[oil-products]-b[sulfuric-acid]"
+   "order": "c[oil-products]-b[sulfuric-acid]",
+   "icon": "__base__/graphics/icons/fluid/sulfuric-acid.png"
   },
   "tank": {
    "name": "tank",
@@ -8628,7 +8806,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "transport"
+   "subgroup": "transport",
+   "icon": "__base__/graphics/icons/tank.png"
   },
   "train-stop": {
    "name": "train-stop",
@@ -8669,7 +8848,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "train-transport"
+   "subgroup": "train-transport",
+   "icon": "__base__/graphics/icons/train-stop.png"
   },
   "transport-belt": {
    "name": "transport-belt",
@@ -8700,7 +8880,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": true,
-   "subgroup": "belt"
+   "subgroup": "belt",
+   "icon": "__base__/graphics/icons/transport-belt.png"
   },
   "underground-belt": {
    "name": "underground-belt",
@@ -8731,7 +8912,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "belt"
+   "subgroup": "belt",
+   "icon": "__base__/graphics/icons/underground-belt.png"
   },
   "uranium-cannon-shell": {
    "name": "uranium-cannon-shell",
@@ -8762,7 +8944,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "ammo"
+   "subgroup": "ammo",
+   "icon": "__base__/graphics/icons/uranium-cannon-shell.png"
   },
   "uranium-fuel-cell": {
    "name": "uranium-fuel-cell",
@@ -8798,7 +8981,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "uranium-processing"
+   "subgroup": "uranium-processing",
+   "icon": "__base__/graphics/icons/uranium-fuel-cell.png"
   },
   "uranium-processing": {
    "name": "uranium-processing",
@@ -8830,7 +9014,8 @@
    "allowProductivity": true,
    "enabledByDefault": false,
    "subgroup": "uranium-processing",
-   "order": "a[uranium-processing]-a[uranium-processing]"
+   "order": "a[uranium-processing]-a[uranium-processing]",
+   "icon": "__base__/graphics/icons/uranium-processing.png"
   },
   "uranium-rounds-magazine": {
    "name": "uranium-rounds-magazine",
@@ -8861,7 +9046,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": false,
-   "subgroup": "ammo"
+   "subgroup": "ammo",
+   "icon": "__base__/graphics/icons/uranium-rounds-magazine.png"
   },
   "utility-science-pack": {
    "name": "utility-science-pack",
@@ -8897,7 +9083,8 @@
    ],
    "allowProductivity": true,
    "enabledByDefault": false,
-   "subgroup": "science-pack"
+   "subgroup": "science-pack",
+   "icon": "__base__/graphics/icons/utility-science-pack.png"
   },
   "wooden-chest": {
    "name": "wooden-chest",
@@ -8923,7 +9110,8 @@
    ],
    "allowProductivity": false,
    "enabledByDefault": true,
-   "subgroup": "storage"
+   "subgroup": "storage",
+   "icon": "__base__/graphics/icons/wooden-chest.png"
   }
  },
  "entities": {
@@ -10369,6 +10557,7 @@
    ],
    "unlocksRecipes": [],
    "maxLevel": "infinite",
+   "icon": "__base__/graphics/technology/artillery-range.png",
    "wikiUrl": "https://wiki.factorio.com/Artillery_shell_range",
    "cost": {
     "countFormula": "2^L*1000",
@@ -10424,6 +10613,7 @@
    ],
    "unlocksRecipes": [],
    "maxLevel": "infinite",
+   "icon": "__base__/graphics/technology/artillery-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Artillery_shell_speed",
    "cost": {
     "countFormula": "1000+3^(L-1)*1000",
@@ -10791,6 +10981,7 @@
    "unlocksRecipes": [
     "battery-equipment"
    ],
+   "icon": "__base__/graphics/technology/battery-equipment.png",
    "wikiUrl": "https://wiki.factorio.com/Battery_equipment",
    "cost": {
     "count": 50,
@@ -10827,6 +11018,7 @@
    "unlocksRecipes": [
     "battery-mk2-equipment"
    ],
+   "icon": "__base__/graphics/technology/battery-mk2-equipment.png",
    "wikiUrl": "https://wiki.factorio.com/Battery_mk2_equipment",
    "cost": {
     "count": 100,
@@ -10866,6 +11058,7 @@
    "unlocksRecipes": [
     "belt-immunity-equipment"
    ],
+   "icon": "__base__/graphics/technology/belt-immunity-equipment.png",
    "wikiUrl": "https://wiki.factorio.com/Belt_immunity_equipment",
    "cost": {
     "count": 50,
@@ -10900,6 +11093,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/braking-force.png",
    "wikiUrl": "https://wiki.factorio.com/Braking_force",
    "cost": {
     "count": 100,
@@ -10938,6 +11132,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/braking-force.png",
    "wikiUrl": "https://wiki.factorio.com/Braking_force",
    "cost": {
     "count": 200,
@@ -10977,6 +11172,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/braking-force.png",
    "wikiUrl": "https://wiki.factorio.com/Braking_force",
    "cost": {
     "count": 250,
@@ -11020,6 +11216,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/braking-force.png",
    "wikiUrl": "https://wiki.factorio.com/Braking_force",
    "cost": {
     "count": 350,
@@ -11063,6 +11260,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/braking-force.png",
    "wikiUrl": "https://wiki.factorio.com/Braking_force",
    "cost": {
     "count": 450,
@@ -11107,6 +11305,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/braking-force.png",
    "wikiUrl": "https://wiki.factorio.com/Braking_force",
    "cost": {
     "count": 550,
@@ -11155,6 +11354,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/braking-force.png",
    "wikiUrl": "https://wiki.factorio.com/Braking_force",
    "cost": {
     "count": 650,
@@ -11655,6 +11855,7 @@
    "unlocksRecipes": [
     "discharge-defense-equipment"
    ],
+   "icon": "__base__/graphics/technology/discharge-defense-equipment.png",
    "wikiUrl": "https://wiki.factorio.com/Discharge_defense_equipment",
    "cost": {
     "count": 100,
@@ -12145,6 +12346,7 @@
    "unlocksRecipes": [
     "energy-shield-equipment"
    ],
+   "icon": "__base__/graphics/technology/energy-shield-equipment.png",
    "wikiUrl": "https://wiki.factorio.com/Energy_shield_equipment",
    "cost": {
     "count": 150,
@@ -12187,6 +12389,7 @@
    "unlocksRecipes": [
     "energy-shield-mk2-equipment"
    ],
+   "icon": "__base__/graphics/technology/energy-shield-mk2-equipment.png",
    "wikiUrl": "https://wiki.factorio.com/Energy_shield_mk2_equipment",
    "cost": {
     "count": 200,
@@ -12269,6 +12472,7 @@
    "unlocksRecipes": [
     "exoskeleton-equipment"
    ],
+   "icon": "__base__/graphics/technology/exoskeleton-equipment.png",
    "wikiUrl": "https://wiki.factorio.com/Exoskeleton_equipment",
    "cost": {
     "count": 50,
@@ -12422,6 +12626,7 @@
    "unlocksRecipes": [
     "fission-reactor-equipment"
    ],
+   "icon": "__base__/graphics/technology/fission-reactor-equipment.png",
    "wikiUrl": "https://wiki.factorio.com/Fission_reactor_equipment",
    "cost": {
     "count": 200,
@@ -12630,6 +12835,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/follower-robots.png",
    "wikiUrl": "https://wiki.factorio.com/Follower_robot_count",
    "cost": {
     "time": 30,
@@ -12653,6 +12859,7 @@
    ],
    "unlocksRecipes": [],
    "maxLevel": "infinite",
+   "icon": "__base__/graphics/technology/follower-robots.png",
    "wikiUrl": "https://wiki.factorio.com/Follower_robot_count",
    "cost": {
     "countFormula": "1000*(L-4)",
@@ -12807,6 +13014,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/inserter-capacity.png",
    "wikiUrl": "https://wiki.factorio.com/Inserter_capacity_bonus",
    "cost": {
     "count": 200,
@@ -12843,6 +13051,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/inserter-capacity.png",
    "wikiUrl": "https://wiki.factorio.com/Inserter_capacity_bonus",
    "cost": {
     "count": 250,
@@ -12876,6 +13085,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/inserter-capacity.png",
    "wikiUrl": "https://wiki.factorio.com/Inserter_capacity_bonus",
    "cost": {
     "count": 250,
@@ -12914,6 +13124,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/inserter-capacity.png",
    "wikiUrl": "https://wiki.factorio.com/Inserter_capacity_bonus",
    "cost": {
     "count": 250,
@@ -12956,6 +13167,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/inserter-capacity.png",
    "wikiUrl": "https://wiki.factorio.com/Inserter_capacity_bonus",
    "cost": {
     "count": 300,
@@ -12998,6 +13210,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/inserter-capacity.png",
    "wikiUrl": "https://wiki.factorio.com/Inserter_capacity_bonus",
    "cost": {
     "count": 400,
@@ -13045,6 +13258,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/inserter-capacity.png",
    "wikiUrl": "https://wiki.factorio.com/Inserter_capacity_bonus",
    "cost": {
     "count": 600,
@@ -13286,6 +13500,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/laser-shooting-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Laser_shooting_speed",
    "cost": {
     "count": 50,
@@ -13329,6 +13544,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/laser-shooting-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Laser_shooting_speed",
    "cost": {
     "count": 100,
@@ -13372,6 +13588,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/laser-shooting-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Laser_shooting_speed",
    "cost": {
     "count": 200,
@@ -13415,6 +13632,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/laser-shooting-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Laser_shooting_speed",
    "cost": {
     "count": 200,
@@ -13459,6 +13677,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/laser-shooting-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Laser_shooting_speed",
    "cost": {
     "count": 200,
@@ -13507,6 +13726,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/laser-shooting-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Laser_shooting_speed",
    "cost": {
     "count": 350,
@@ -13555,6 +13775,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/laser-shooting-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Laser_shooting_speed",
    "cost": {
     "count": 450,
@@ -13650,6 +13871,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/laser-weapons-damage.png",
    "wikiUrl": "https://wiki.factorio.com/Laser_weapons_damage",
    "cost": {
     "count": 100,
@@ -13693,6 +13915,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/laser-weapons-damage.png",
    "wikiUrl": "https://wiki.factorio.com/Laser_weapons_damage",
    "cost": {
     "count": 200,
@@ -13736,6 +13959,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/laser-weapons-damage.png",
    "wikiUrl": "https://wiki.factorio.com/Laser_weapons_damage",
    "cost": {
     "count": 300,
@@ -13779,6 +14003,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/laser-weapons-damage.png",
    "wikiUrl": "https://wiki.factorio.com/Laser_weapons_damage",
    "cost": {
     "count": 400,
@@ -13828,6 +14053,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/laser-weapons-damage.png",
    "wikiUrl": "https://wiki.factorio.com/Laser_weapons_damage",
    "cost": {
     "count": 500,
@@ -13886,6 +14112,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/laser-weapons-damage.png",
    "wikiUrl": "https://wiki.factorio.com/Laser_weapons_damage",
    "cost": {
     "count": 600,
@@ -13946,6 +14173,7 @@
    ],
    "unlocksRecipes": [],
    "maxLevel": "infinite",
+   "icon": "__base__/graphics/technology/laser-weapons-damage.png",
    "wikiUrl": "https://wiki.factorio.com/Laser_weapons_damage",
    "cost": {
     "countFormula": "2^(L-7)*1000",
@@ -14605,6 +14833,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/mining-productivity.png",
    "wikiUrl": "https://wiki.factorio.com/Mining_productivity",
    "cost": {
     "count": 250,
@@ -14638,6 +14867,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/mining-productivity.png",
    "wikiUrl": "https://wiki.factorio.com/Mining_productivity",
    "cost": {
     "count": 500,
@@ -14677,6 +14907,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/mining-productivity.png",
    "wikiUrl": "https://wiki.factorio.com/Mining_productivity",
    "cost": {
     "count": 1000,
@@ -14726,6 +14957,7 @@
    ],
    "unlocksRecipes": [],
    "maxLevel": "infinite",
+   "icon": "__base__/graphics/technology/mining-productivity.png",
    "wikiUrl": "https://wiki.factorio.com/Mining_productivity",
    "cost": {
     "countFormula": "2500*(L - 3)",
@@ -14844,6 +15076,7 @@
    "unlocksRecipes": [
     "night-vision-equipment"
    ],
+   "icon": "__base__/graphics/technology/night-vision-equipment.png",
    "wikiUrl": "https://wiki.factorio.com/Night_vision_equipment",
    "cost": {
     "count": 50,
@@ -15057,6 +15290,7 @@
    "unlocksRecipes": [
     "personal-laser-defense-equipment"
    ],
+   "icon": "__base__/graphics/technology/personal-laser-defense-equipment.png",
    "wikiUrl": "https://wiki.factorio.com/Personal_laser_defense_equipment",
    "cost": {
     "count": 100,
@@ -15102,6 +15336,7 @@
    "unlocksRecipes": [
     "personal-roboport-equipment"
    ],
+   "icon": "__base__/graphics/technology/personal-roboport-equipment.png",
    "wikiUrl": "https://wiki.factorio.com/Personal_roboport_equipment",
    "cost": {
     "count": 50,
@@ -15142,6 +15377,7 @@
    "unlocksRecipes": [
     "personal-roboport-mk2-equipment"
    ],
+   "icon": "__base__/graphics/technology/personal-roboport-mk2-equipment.png",
    "wikiUrl": "https://wiki.factorio.com/Personal_roboport_mk2_equipment",
    "cost": {
     "count": 250,
@@ -15195,6 +15431,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/physical-projectile-damage-1.png",
    "wikiUrl": "https://wiki.factorio.com/Physical_projectile_damage",
    "cost": {
     "count": 100,
@@ -15234,6 +15471,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/physical-projectile-damage-1.png",
    "wikiUrl": "https://wiki.factorio.com/Physical_projectile_damage",
    "cost": {
     "count": 200,
@@ -15278,6 +15516,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/physical-projectile-damage-1.png",
    "wikiUrl": "https://wiki.factorio.com/Physical_projectile_damage",
    "cost": {
     "count": 300,
@@ -15326,6 +15565,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/physical-projectile-damage-1.png",
    "wikiUrl": "https://wiki.factorio.com/Physical_projectile_damage",
    "cost": {
     "count": 400,
@@ -15380,6 +15620,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/physical-projectile-damage-2.png",
    "wikiUrl": "https://wiki.factorio.com/Physical_projectile_damage",
    "cost": {
     "count": 500,
@@ -15439,6 +15680,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/physical-projectile-damage-2.png",
    "wikiUrl": "https://wiki.factorio.com/Physical_projectile_damage",
    "cost": {
     "count": 600,
@@ -15504,6 +15746,7 @@
    ],
    "unlocksRecipes": [],
    "maxLevel": "infinite",
+   "icon": "__base__/graphics/technology/physical-projectile-damage-2.png",
    "wikiUrl": "https://wiki.factorio.com/Physical_projectile_damage",
    "cost": {
     "countFormula": "2^(L-7)*1000",
@@ -15977,6 +16220,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/refined-flammables.png",
    "wikiUrl": "https://wiki.factorio.com/Refined_flammables",
    "cost": {
     "count": 100,
@@ -16020,6 +16264,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/refined-flammables.png",
    "wikiUrl": "https://wiki.factorio.com/Refined_flammables",
    "cost": {
     "count": 200,
@@ -16064,6 +16309,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/refined-flammables.png",
    "wikiUrl": "https://wiki.factorio.com/Refined_flammables",
    "cost": {
     "count": 300,
@@ -16113,6 +16359,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/refined-flammables.png",
    "wikiUrl": "https://wiki.factorio.com/Refined_flammables",
    "cost": {
     "count": 400,
@@ -16166,6 +16413,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/refined-flammables.png",
    "wikiUrl": "https://wiki.factorio.com/Refined_flammables",
    "cost": {
     "count": 500,
@@ -16219,6 +16467,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/refined-flammables.png",
    "wikiUrl": "https://wiki.factorio.com/Refined_flammables",
    "cost": {
     "count": 600,
@@ -16274,6 +16523,7 @@
    ],
    "unlocksRecipes": [],
    "maxLevel": "infinite",
+   "icon": "__base__/graphics/technology/refined-flammables.png",
    "wikiUrl": "https://wiki.factorio.com/Refined_flammables",
    "cost": {
     "countFormula": "2^(L-7)*1000",
@@ -16356,6 +16606,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/research-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Research_speed",
    "cost": {
     "count": 100,
@@ -16388,6 +16639,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/research-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Research_speed",
    "cost": {
     "count": 200,
@@ -16421,6 +16673,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/research-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Research_speed",
    "cost": {
     "count": 250,
@@ -16458,6 +16711,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/research-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Research_speed",
    "cost": {
     "count": 500,
@@ -16496,6 +16750,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/research-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Research_speed",
    "cost": {
     "count": 500,
@@ -16539,6 +16794,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/research-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Research_speed",
    "cost": {
     "count": 500,
@@ -16826,6 +17082,7 @@
    "unlocksRecipes": [
     "solar-panel-equipment"
    ],
+   "icon": "__base__/graphics/technology/solar-panel-equipment.png",
    "wikiUrl": "https://wiki.factorio.com/Solar_panel_equipment",
    "cost": {
     "count": 100,
@@ -17173,6 +17430,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/stronger-explosives-1.png",
    "wikiUrl": "https://wiki.factorio.com/Stronger_explosives",
    "cost": {
     "count": 100,
@@ -17212,6 +17470,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/stronger-explosives-2.png",
    "wikiUrl": "https://wiki.factorio.com/Stronger_explosives",
    "cost": {
     "count": 200,
@@ -17261,6 +17520,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/stronger-explosives-3.png",
    "wikiUrl": "https://wiki.factorio.com/Stronger_explosives",
    "cost": {
     "count": 300,
@@ -17315,6 +17575,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/stronger-explosives-3.png",
    "wikiUrl": "https://wiki.factorio.com/Stronger_explosives",
    "cost": {
     "count": 400,
@@ -17373,6 +17634,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/stronger-explosives-3.png",
    "wikiUrl": "https://wiki.factorio.com/Stronger_explosives",
    "cost": {
     "count": 500,
@@ -17431,6 +17693,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/stronger-explosives-3.png",
    "wikiUrl": "https://wiki.factorio.com/Stronger_explosives",
    "cost": {
     "count": 600,
@@ -17491,6 +17754,7 @@
    ],
    "unlocksRecipes": [],
    "maxLevel": "infinite",
+   "icon": "__base__/graphics/technology/stronger-explosives-3.png",
    "wikiUrl": "https://wiki.factorio.com/Stronger_explosives",
    "cost": {
     "countFormula": "2^(L-7)*1000",
@@ -17641,6 +17905,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/toolbelt.png",
    "wikiUrl": "https://wiki.factorio.com/Toolbelt",
    "cost": {
     "count": 100,
@@ -17846,6 +18111,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/weapon-shooting-speed-1.png",
    "wikiUrl": "https://wiki.factorio.com/Weapon_shooting_speed",
    "cost": {
     "count": 100,
@@ -17880,6 +18146,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/weapon-shooting-speed-1.png",
    "wikiUrl": "https://wiki.factorio.com/Weapon_shooting_speed",
    "cost": {
     "count": 200,
@@ -17924,6 +18191,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/weapon-shooting-speed-2.png",
    "wikiUrl": "https://wiki.factorio.com/Weapon_shooting_speed",
    "cost": {
     "count": 300,
@@ -17972,6 +18240,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/weapon-shooting-speed-2.png",
    "wikiUrl": "https://wiki.factorio.com/Weapon_shooting_speed",
    "cost": {
     "count": 400,
@@ -18026,6 +18295,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/weapon-shooting-speed-3.png",
    "wikiUrl": "https://wiki.factorio.com/Weapon_shooting_speed",
    "cost": {
     "count": 500,
@@ -18085,6 +18355,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/weapon-shooting-speed-3.png",
    "wikiUrl": "https://wiki.factorio.com/Weapon_shooting_speed",
    "cost": {
     "count": 600,
@@ -18133,6 +18404,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/worker-robots-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Worker_robots_speed",
    "cost": {
     "count": 50,
@@ -18171,6 +18443,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/worker-robots-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Worker_robots_speed",
    "cost": {
     "count": 100,
@@ -18210,6 +18483,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/worker-robots-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Worker_robots_speed",
    "cost": {
     "count": 150,
@@ -18253,6 +18527,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/worker-robots-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Worker_robots_speed",
    "cost": {
     "count": 250,
@@ -18297,6 +18572,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/worker-robots-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Worker_robots_speed",
    "cost": {
     "count": 500,
@@ -18347,6 +18623,7 @@
    ],
    "unlocksRecipes": [],
    "maxLevel": "infinite",
+   "icon": "__base__/graphics/technology/worker-robots-speed.png",
    "wikiUrl": "https://wiki.factorio.com/Worker_robots_speed",
    "cost": {
     "countFormula": "2^(L-6)*1000",
@@ -18400,6 +18677,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/worker-robots-storage.png",
    "wikiUrl": "https://wiki.factorio.com/Worker_robots_storage",
    "cost": {
     "count": 200,
@@ -18439,6 +18717,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/worker-robots-storage.png",
    "wikiUrl": "https://wiki.factorio.com/Worker_robots_storage",
    "cost": {
     "count": 300,
@@ -18483,6 +18762,7 @@
     }
    ],
    "unlocksRecipes": [],
+   "icon": "__base__/graphics/technology/worker-robots-storage.png",
    "wikiUrl": "https://wiki.factorio.com/Worker_robots_storage",
    "cost": {
     "count": 450,

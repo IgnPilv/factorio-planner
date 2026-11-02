@@ -47,7 +47,7 @@ import { checkLayoutRails, type RailCheck } from './railCheck';
 import { planRail, railFromPiece, railStartAt, signalAt, trainStopAt } from './rails';
 import { newId as railId } from './model';
 import type { RailEnd } from '../rails/geometry';
-import { wikiIconUrl } from '../data';
+import { GameIcon, useIconsVersion } from '../ui/GameIcon';
 import './editor.css';
 
 export type Tool =
@@ -203,6 +203,9 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
       r.destroy();
     };
   }, []);
+
+  const iconsVersion = useIconsVersion();
+  useEffect(() => rendererRef.current?.refreshIcons(), [iconsVersion]);
 
   useEffect(() => {
     rendererRef.current?.setLayout(layout);
@@ -779,7 +782,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
                     title={`${def.displayName} (${def.width}×${def.height})${locked ? ': not researched yet' : ''}`}
                   >
                     <span className="swatch" style={{ background: `#${entityColor(def).toString(16).padStart(6, '0')}` }}>
-                      <img src={wikiIconUrl(def.displayName)} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
+                      <GameIcon name={n} kind="entity" size={28} className="" />
                     </span>
                     <span className="palette-name">{def.displayName}</span>
                   </button>

@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
 import {
-  gameData as d, machinesFor, recipesProducing, recipesUsing, techUnlocking, wikiIconUrl,
+  gameData as d, machinesFor, recipesProducing, recipesUsing, techUnlocking,
   type Entity, type Ingredient, type Product, type Technology,
 } from '../data';
+import type { IconKind } from '../data/icons';
+import { GameIcon } from './GameIcon';
 
 type Tab = 'items' | 'recipes' | 'buildings' | 'research';
 type Selection = { tab: Tab; name: string } | null;
@@ -22,12 +24,10 @@ function fmtPower(w?: number) {
 }
 const fmtNum = (n: number) => String(+n.toFixed(3));
 
-function Icon({ name, size = 24 }: { name: string; size?: number }) {
-  const label = d.items[name]?.displayName ?? d.entities[name]?.displayName ?? d.technologies[name]?.displayName ?? name;
-  return (
-    <img className="icon" src={wikiIconUrl(label)} alt="" width={size} height={size} loading="lazy"
-      onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }} />
-  );
+const TAB_KIND = { items: 'item', recipes: 'recipe', buildings: 'entity', research: 'technology' } as const;
+
+function Icon({ name, kind, size = 24 }: { name: string; kind?: IconKind; size?: number }) {
+  return <GameIcon name={name} kind={kind} size={size} />;
 }
 
 function Amounts({ list, onPick }: { list: (Ingredient | Product)[]; onPick: (name: string) => void }) {
@@ -78,7 +78,7 @@ export function DataBrowser() {
           {list.map((x) => (
             <li key={x.name}>
               <button className={sel?.tab === tab && sel.name === x.name ? 'row active' : 'row'} onClick={() => pick(tab, x.name)}>
-                <Icon name={x.name} size={20} /> {x.displayName}
+                <Icon name={x.name} kind={TAB_KIND[tab]} size={20} /> {x.displayName}
               </button>
             </li>
           ))}
@@ -98,10 +98,10 @@ export function DataBrowser() {
 
 type PickProps = { onPickItem: (n: string) => void; onPick: (t: Tab, n: string) => void };
 
-function Header({ name, displayName, wikiUrl }: { name: string; displayName: string; wikiUrl: string }) {
+function Header({ name, displayName, wikiUrl, kind }: { name: string; displayName: string; wikiUrl: string; kind: IconKind }) {
   return (
     <header className="detail-head">
-      <Icon name={name} size={40} />
+      <Icon name={name} kind={kind} size={40} />
       <h2>{displayName}</h2>
       <a href={wikiUrl} target="_blank" rel="noreferrer">Wiki ↗</a>
     </header>
@@ -132,7 +132,7 @@ function ItemDetail({ name, onPickItem, onPick }: { name: string } & PickProps) 
   const place = it.placeResult ? d.entities[it.placeResult] : undefined;
   return (
     <div>
-      <Header {...it} />
+      <Header {...it} kind="item" />
       <dl className="stats">
         <dt>Type</dt><dd>{it.type}</dd>
         {it.stackSize && <><dt>Stack size</dt><dd>{it.stackSize}</dd></>}
@@ -159,7 +159,7 @@ function RecipeDetail({ name, onPickItem, onPick }: { name: string } & PickProps
   const main = r.results[0];
   return (
     <div>
-      <Header name={main?.name ?? name} displayName={r.displayName} wikiUrl={d.items[main?.name]?.wikiUrl ?? ''} />
+      <Header name={name} kind="recipe" displayName={r.displayName} wikiUrl={d.items[main?.name]?.wikiUrl ?? ''} />
       <div className="flow big">
         <Amounts list={r.ingredients} onPick={onPickItem} />
         <span className="arrow">→</span>
@@ -180,7 +180,7 @@ function RecipeDetail({ name, onPickItem, onPick }: { name: string } & PickProps
             const perMin = (60 * (m.craftingSpeed ?? 1)) / r.time;
             return (
               <tr key={m.name}>
-                <td><button className="link" onClick={() => onPick('buildings', m.name)}><Icon name={m.name} size={18} /> {m.displayName}</button></td>
+                <td><button className="link" onClick={() => onPick('buildings', m.name)}><Icon name={m.name} kind="entity" size={18} /> {m.displayName}</button></td>
                 <td>{m.craftingSpeed}</td>
                 <td>{fmtNum(perMin)}</td>
                 {r.results.map((p) => <td key={p.name}>{fmtNum(perMin * p.amount * (p.probability ?? 1))}</td>)}
@@ -226,7 +226,7 @@ function EntityDetail({ e, onPick }: { e?: Entity; onPick: (t: Tab, n: string) =
   const tech = recipe && techUnlocking(d, recipe.name);
   return (
     <div>
-      <Header {...e} />
+      <Header {...e} kind="entity" />
       <dl className="stats">
         <dt>Size</dt><dd>{e.width}×{e.height}</dd>
         {ENTITY_FIELDS.map(([k, label, f]) => e[k] !== undefined && (
@@ -258,7 +258,7 @@ function TechDetail({ t, onPick }: { t?: Technology; onPick: (t: Tab, n: string)
   const bonuses = t.effects.map(describeEffect).filter(Boolean);
   return (
     <div>
-      <Header {...t} />
+      <Header {...t} kind="technology" />
       {t.affectsRates && <p className="badge">Changes production rates</p>}
       <dl className="stats">
         {t.cost && <><dt>Cost</dt><dd>{t.cost.count ?? t.cost.countFormula} × ({t.cost.ingredients.map((i) => d.items[i.name]?.displayName).join(', ')}), {t.cost.time}s each</dd></>}
@@ -270,7 +270,7 @@ function TechDetail({ t, onPick }: { t?: Technology; onPick: (t: Tab, n: string)
       {bonuses.length > 0 && <><h3>Bonuses</h3><ul>{bonuses.map((b) => <li key={b}>{b}</li>)}</ul></>}
       {t.unlocksRecipes.length > 0 && <><h3>Unlocks</h3>
         <div className="amounts">{t.unlocksRecipes.map((r) => (
-          <button key={r} className="chip" onClick={() => onPick('recipes', r)}><Icon name={d.recipes[r]?.results[0]?.name ?? r} size={20} /><span className="chip-name">{d.recipes[r]?.displayName ?? r}</span></button>
+          <button key={r} className="chip" onClick={() => onPick('recipes', r)}><Icon name={r} kind="recipe" size={20} /><span className="chip-name">{d.recipes[r]?.displayName ?? r}</span></button>
         ))}</div></>}
     </div>
   );
