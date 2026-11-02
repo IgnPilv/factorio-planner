@@ -75,6 +75,8 @@ export interface Recipe {
   order?: string;
   /** Maximum productivity bonus for this recipe (default 3 = +300%). */
   maximumProductivity?: number;
+  /** Icon path inside the game files: the recipe's own, else its main product's. */
+  icon?: string;
 }
 
 export type EntityKind =

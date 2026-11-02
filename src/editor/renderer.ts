@@ -1,8 +1,9 @@
 // PixiJS renderer for the layout grid. Owns the canvas, the camera and the
 // drawing; knows nothing about React or editing rules.
 
-import { Application, Container, Graphics, Text } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import { gameData } from '../data';
+import { iconBitmap, iconPath, type IconKind } from '../data/icons';
 import { ENTITIES, entityColor, isRotatable, shortLabel } from './catalog';
 import { entityRect, footprint, tileKey, type Direction, type Layout } from './model';
 import { centreLine, type Point, type RailEnd } from '../rails/geometry';
@@ -81,6 +82,7 @@ export class GridRenderer {
   private badges: Record<string, string> = {};
   private ghost: Ghost = { items: [] };
   private view: ViewOverlay = {};
+  private textures = new Map<string, Texture>();
 
   async init(host: HTMLElement) {
     await this.app.init({
@@ -174,6 +176,33 @@ export class GridRenderer {
     if (this.ready) this.drawViewOverlay();
   }
 
+  /** Call when game icons were loaded or forgotten. */
+  refreshIcons() {
+    if (!this.ready) return;
+    this.drawEntities();
+    this.drawGhost();
+  }
+
+  /** Sprite of a game icon centred on (cx, cy), or nothing when icons aren't loaded. */
+  private icon(name: string, kind: IconKind, cx: number, cy: number, size: number, alpha = 1): Sprite | undefined {
+    const path = iconPath(name, kind);
+    if (!path) return undefined;
+    const bmp = iconBitmap(path);
+    if (!bmp) return undefined;
+    let tex = this.textures.get(path);
+    if (tex?.source.resource !== bmp) {
+      tex?.destroy(true); // its bitmap was replaced or forgotten
+      tex = Texture.from(bmp);
+      this.textures.set(path, tex);
+    }
+    const sp = new Sprite(tex);
+    sp.anchor.set(0.5);
+    sp.position.set(cx, cy);
+    sp.width = sp.height = size;
+    sp.alpha = alpha;
+    return sp;
+  }
+
   setGhost(ghost: Ghost) {
     this.ghost = ghost;
     if (this.ready) this.drawGhost();
@@ -257,8 +286,9 @@ export class GridRenderer {
   private drawEntities() {
     for (const c of this.entities.removeChildren()) c.destroy();
     const body = new Graphics();
+    const icons = new Container();
     const marks = new Graphics();
-    this.entities.addChild(body, marks);
+    this.entities.addChild(body, icons, marks);
     const labels: Text[] = [];
 
     for (const e of this.layout.entities) {
@@ -280,7 +310,17 @@ export class GridRenderer {
       else if (def.kind === 'offshore-pump') drawArrow(marks, px, py, w, h, ((e.direction + 2) % 4) as Direction, 0.35);
       else if (isRotatable(def)) drawArrow(marks, px, py, w, h, e.direction, Math.min(0.25, 10 / Math.min(w, h)));
 
-      const label = shortLabel(def);
+      // Game icons (when loaded): the recipe or mined resource, like the game's alt-mode,
+      // with the building's own icon in the corner; otherwise the building icon.
+      const cx = px + w / 2, cy = py + h / 2, short = Math.min(w, h);
+      const product = e.recipe ? (gameData.recipes[e.recipe] ? this.icon(e.recipe, 'recipe', cx, cy, short * 0.6) : this.icon(e.recipe, 'item', cx, cy, short * 0.6)) : undefined;
+      const own = def.kind === 'belt' ? undefined
+        : product ? (r.w >= 2 && r.h >= 2 ? this.icon(e.name, 'entity', px + TILE * 0.4, py + TILE * 0.4, TILE * 0.55) : undefined)
+          : this.icon(e.name, 'entity', cx, cy, short <= TILE ? TILE * 0.75 : Math.min(short * 0.6, TILE * 2.5));
+      if (product) icons.addChild(product);
+      if (own) icons.addChild(own);
+
+      const label = !product && !own && shortLabel(def);
       if (label) {
         const t = new Text({ text: label, style: { fontFamily: 'system-ui, sans-serif', fontSize: 13, fill: 0xffffff, fontWeight: '600' } });
         t.resolution = 2;
@@ -289,7 +329,7 @@ export class GridRenderer {
         labels.push(t);
       }
       const recipeName = e.recipe && (gameData.recipes[e.recipe]?.displayName ?? gameData.resources[e.recipe]?.displayName ?? gameData.items[e.recipe]?.displayName);
-      if (recipeName && r.w >= 2) {
+      if (recipeName && !product && r.w >= 2) {
         const t = new Text({
           text: recipeName,
           style: { fontFamily: 'system-ui, sans-serif', fontSize: 9, fill: 0xffe6a0, wordWrap: true, wordWrapWidth: w - 6, align: 'center' },
@@ -416,6 +456,10 @@ export class GridRenderer {
       else if (def.kind === 'offshore-pump') drawArrow(arrows, it.x * TILE, it.y * TILE, w * TILE, h * TILE, ((it.direction + 2) % 4) as Direction, 0.35);
       else if (isRotatable(def)) drawArrow(arrows, it.x * TILE, it.y * TILE, w * TILE, h * TILE, it.direction, Math.min(0.3, 12 / Math.min(w * TILE, h * TILE) + 0.1));
       arrows.fill({ color: 0xffffff, alpha: 0.8 });
+      const s = Math.min(w, h) * TILE;
+      const ic = def.kind === 'belt' ? undefined
+        : this.icon(it.name, 'entity', (it.x + w / 2) * TILE, (it.y + h / 2) * TILE, s <= TILE ? TILE * 0.75 : Math.min(s * 0.6, TILE * 2.5), 0.75);
+      if (ic) this.ghostLayer.addChild(ic);
       this.ghostLayer.addChild(arrows);
     }
   }

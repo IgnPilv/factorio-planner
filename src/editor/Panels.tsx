@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { bottlenecks, groupFlows, layoutTotals, type Bottleneck, type EntityRate, type PlacedEntity, type EntityState, type SteadyStateResult, type TransportState } from '../calc';
-import { gameData, wikiIconUrl } from '../data';
+import { gameData } from '../data';
+import { GameIcon } from '../ui/GameIcon';
 import { ENTITIES } from './catalog';
 import { formatWatts, type PowerReport, type PowerStatus } from './power';
 import { quickSearch, type SearchHit } from './search';
@@ -205,7 +206,7 @@ export function QuickSearch({ onPick, unlocks }: { onPick: (hit: SearchHit) => v
                 onMouseEnter={() => setActive(i)}
                 onClick={() => pick(h)}
               >
-                <img src={wikiIconUrl(h.label)} alt="" width={20} height={20} loading="lazy" onError={(e) => ((e.target as HTMLImageElement).style.visibility = 'hidden')} />
+                <GameIcon name={h.recipe ?? h.building} kind={h.kind === 'building' ? 'entity' : h.kind === 'recipe' ? 'recipe' : 'item'} size={20} className="" />
                 <span className="hit-label">{h.label}</span>
                 <span className="hit-kind">
                   {h.locked ? 'not researched' : h.kind === 'building' ? `${ENTITIES[h.building].width}×${ENTITIES[h.building].height}` : `in ${h.detail}`}
