@@ -3,6 +3,9 @@
 
 import type { Entity } from '../data/types';
 import { ENTITIES, isRotatable } from './catalog';
+import { evenFloor, moveRail, railBounds, railTiles, railValid, rotateRail, type PlacedRail } from './rails';
+
+export type { PlacedRail } from './rails';
 
 /** 0 = north, 1 = east, 2 = south, 3 = west */
 export type Direction = 0 | 1 | 2 | 3;
@@ -33,6 +36,8 @@ export interface Layout {
   entities: PlacedEntity[];
   /** water tiles as "x,y" keys */
   water: string[];
+  /** Rail track pieces (2.0 blueprint form). Signals and train stops are entities. */
+  rails?: PlacedRail[];
 }
 
 export const emptyLayout = (): Layout => ({ version: 1, entities: [], water: [] });
@@ -57,12 +62,16 @@ export function tilesOf(rect: { x: number; y: number; w: number; h: number }) {
   return out;
 }
 
-/** Map from tile key to the id of the entity covering it. */
-export function buildOccupancy(entities: PlacedEntity[]) {
+/** Map from tile key to the id of the entity covering it. Rails count too, under buildings. */
+export function buildOccupancy(entities: readonly PlacedEntity[], rails: readonly PlacedRail[] = []) {
   const occ = new Map<string, string>();
+  for (const r of rails) for (const k of railTiles(r)) occ.set(k, r.id);
   for (const e of entities) for (const [x, y] of tilesOf(entityRect(e))) occ.set(tileKey(x, y), e.id);
   return occ;
 }
+
+/** Occupancy of a whole layout: buildings and rails. */
+export const layoutOccupancy = (layout: Layout) => buildOccupancy(layout.entities, layout.rails);
 
 /** Top-left tile so the footprint is centred on the cursor tile (like the game). */
 export function anchorForCursor(name: string, direction: Direction, cx: number, cy: number) {
@@ -136,7 +145,7 @@ let idCounter = 0;
 export const newId = () => `e${Date.now().toString(36)}${(idCounter++).toString(36)}`;
 
 export function placeEntity(layout: Layout, e: Omit<PlacedEntity, 'id'>): { layout: Layout; result: PlaceCheck; id?: string } {
-  const occ = buildOccupancy(layout.entities);
+  const occ = layoutOccupancy(layout);
   const water = new Set(layout.water);
   const result = canPlace(occ, water, e.name, e.x, e.y, e.direction);
   if (!result.ok) return { layout, result };
@@ -147,8 +156,35 @@ export function placeEntity(layout: Layout, e: Omit<PlacedEntity, 'id'>): { layo
 export function removeEntities(layout: Layout, ids: Iterable<string>): Layout {
   const s = new Set(ids);
   if (s.size === 0) return layout;
-  return { ...layout, entities: layout.entities.filter((e) => !s.has(e.id)) };
+  const out: Layout = { ...layout, entities: layout.entities.filter((e) => !s.has(e.id)) };
+  if (layout.rails?.some((r) => s.has(r.id))) out.rails = layout.rails.filter((r) => !s.has(r.id));
+  return out;
 }
+
+/** Add rails, skipping exact duplicates and pieces that would run through a building. */
+export function addRails(layout: Layout, rails: readonly Omit<PlacedRail, 'id'>[]): { layout: Layout; added: string[]; blocked: number } {
+  const have = new Set((layout.rails ?? []).map(railKey));
+  const occ = buildOccupancy(layout.entities);
+  const water = new Set(layout.water);
+  const added: PlacedRail[] = [];
+  let blocked = 0;
+  for (const r of rails) {
+    const k = railKey(r);
+    if (have.has(k)) continue;
+    const placed = { ...r, id: newId() };
+    if (railTiles(placed).some((t) => occ.has(t) || water.has(t))) {
+      blocked++;
+      continue;
+    }
+    have.add(k);
+    added.push(placed);
+  }
+  if (!added.length) return { layout, added: [], blocked };
+  return { layout: { ...layout, rails: [...(layout.rails ?? []), ...added] }, added: added.map((r) => r.id), blocked };
+}
+
+const railKey = (r: Omit<PlacedRail, 'id'>) => `${r.name}|${r.x}|${r.y}|${r.direction}`;
+
 
 export function updateEntity(layout: Layout, id: string, patch: Partial<Omit<PlacedEntity, 'id'>>): Layout {
   return { ...layout, entities: layout.entities.map((e) => (e.id === id ? { ...e, ...patch } : e)) };
@@ -165,7 +201,7 @@ export function rotateEntity(layout: Layout, id: string): Layout {
   const next = footprint(def, dir);
   const nx = e.x + Math.floor((old.w - next.w) / 2);
   const ny = e.y + Math.floor((old.h - next.h) / 2);
-  const occ = buildOccupancy(layout.entities);
+  const occ = layoutOccupancy(layout);
   const check = canPlace(occ, new Set(layout.water), e.name, nx, ny, dir, id);
   if (!check.ok) return layout;
   return updateEntity(layout, id, { direction: dir, x: nx, y: ny });
@@ -173,7 +209,7 @@ export function rotateEntity(layout: Layout, id: string): Layout {
 
 export function setWater(layout: Layout, tiles: [number, number][], on: boolean): Layout {
   const set = new Set(layout.water);
-  const occ = buildOccupancy(layout.entities);
+  const occ = layoutOccupancy(layout);
   let changed = false;
   for (const [x, y] of tiles) {
     const k = tileKey(x, y);
@@ -230,14 +266,23 @@ export function parseLayout(json: string): Layout {
   const entities: PlacedEntity[] = raw.entities
     .filter((e: PlacedEntity) => typeof e?.name === 'string' && ENTITIES[e.name] && Number.isInteger(e.x) && Number.isInteger(e.y))
     .map((e: PlacedEntity) => ({ ...e, id: typeof e.id === 'string' ? e.id : newId(), direction: ((e.direction ?? 0) & 3) as Direction }));
-  return { version: 1, entities, water: raw.water.filter((k: unknown) => typeof k === 'string') };
+  const out: Layout = { version: 1, entities, water: raw.water.filter((k: unknown) => typeof k === 'string') };
+  if (Array.isArray(raw.rails)) {
+    const rails = (raw.rails as PlacedRail[])
+      .filter((r) => r && railValid(r))
+      .map((r) => ({ id: typeof r.id === 'string' ? r.id : newId(), name: r.name, x: r.x, y: r.y, direction: r.direction }));
+    if (rails.length) out.rails = rails;
+  }
+  return out;
 }
 
 // ---- selections, clipboard and rotation of groups ---------------------------
 
-/** A copied group of buildings, positioned relative to its bounding box. */
+/** A copied group of buildings (and rails), positioned relative to its bounding box. */
 export interface Clipboard {
   entities: Omit<PlacedEntity, 'id'>[];
+  /** Rails, relative to the same corner. When there are rails, w and h are even and the clipboard moves in steps of 2. */
+  rails?: Omit<PlacedRail, 'id'>[];
   w: number;
   h: number;
 }
@@ -254,19 +299,38 @@ export function boundsOf(entities: readonly PlacedEntity[] | readonly Omit<Place
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 
-export function copyToClipboard(entities: readonly PlacedEntity[]): Clipboard | null {
-  if (!entities.length) return null;
-  const b = boundsOf(entities);
-  return {
+/** Bounds of buildings and rails together; with rails, the corner and size are even. */
+export function groupBounds(entities: readonly Omit<PlacedEntity, 'id'>[], rails: readonly Omit<PlacedRail, 'id'>[] = []) {
+  const parts = [] as { x: number; y: number; w: number; h: number }[];
+  if (entities.length) parts.push(boundsOf(entities));
+  if (rails.length) parts.push(railBounds(rails as PlacedRail[]));
+  if (!parts.length) return { x: 0, y: 0, w: 0, h: 0 };
+  let x0 = Math.min(...parts.map((b) => b.x)), y0 = Math.min(...parts.map((b) => b.y));
+  let x1 = Math.max(...parts.map((b) => b.x + b.w)), y1 = Math.max(...parts.map((b) => b.y + b.h));
+  if (rails.length) {
+    x0 = evenFloor(x0);
+    y0 = evenFloor(y0);
+    x1 = -evenFloor(-x1);
+    y1 = -evenFloor(-y1);
+  }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+export function copyToClipboard(entities: readonly PlacedEntity[], rails: readonly PlacedRail[] = []): Clipboard | null {
+  if (!entities.length && !rails.length) return null;
+  const b = groupBounds(entities, rails);
+  const clip: Clipboard = {
     w: b.w,
     h: b.h,
     entities: entities.map(({ id: _id, ...e }) => ({ ...e, x: e.x - b.x, y: e.y - b.y, modules: e.modules ? [...e.modules] : undefined })),
   };
+  if (rails.length) clip.rails = rails.map(({ id: _id, ...r }) => moveRail(r, -b.x, -b.y));
+  return clip;
 }
 
 /** Rotate a clipboard 90° clockwise. Buildings that can't turn keep their direction but still move. */
 export function rotateClipboard(clip: Clipboard): Clipboard {
-  return {
+  const out: Clipboard = {
     w: clip.h,
     h: clip.w,
     entities: clip.entities.map((e) => {
@@ -277,21 +341,42 @@ export function rotateClipboard(clip: Clipboard): Clipboard {
       return { ...e, direction, x: clip.h - (r.y + r.h), y: r.x };
     }),
   };
+  if (clip.rails?.length) out.rails = clip.rails.map((r) => rotateRail(r, clip.h));
+  return out;
+}
+
+/** Top-left corner of the clipboard when centred on tile cx,cy (even when it holds rails). */
+function clipOrigin(clip: Clipboard, cx: number, cy: number) {
+  let ox = cx - Math.floor((clip.w - 1) / 2);
+  let oy = cy - Math.floor((clip.h - 1) / 2);
+  if (clip.rails?.length) {
+    ox = evenFloor(ox);
+    oy = evenFloor(oy);
+  }
+  return { ox, oy };
 }
 
 /** Where each clipboard entity lands when the clipboard is centred on tile cx,cy. */
 export function clipboardAt(clip: Clipboard, cx: number, cy: number) {
-  const ox = cx - Math.floor((clip.w - 1) / 2);
-  const oy = cy - Math.floor((clip.h - 1) / 2);
+  const { ox, oy } = clipOrigin(clip, cx, cy);
   return clip.entities.map((e) => ({ ...e, x: e.x + ox, y: e.y + oy }));
 }
 
-/** Paste: place every building that fits; returns how many were blocked. */
+/** Where the clipboard's rails land when it is centred on tile cx,cy. */
+export function clipboardRailsAt(clip: Clipboard, cx: number, cy: number) {
+  const { ox, oy } = clipOrigin(clip, cx, cy);
+  return (clip.rails ?? []).map((r) => moveRail(r, ox, oy));
+}
+
+/** Paste: place every building and rail that fits; returns how many were blocked. */
 export function pasteClipboard(layout: Layout, clip: Clipboard, cx: number, cy: number): { layout: Layout; placed: string[]; blocked: number } {
-  const occ = buildOccupancy(layout.entities);
+  // Rails first, so buildings in the clipboard can't land on the pasted track.
+  const withRails = addRails(layout, clipboardRailsAt(clip, cx, cy));
+  layout = withRails.layout;
+  const occ = layoutOccupancy(layout);
   const water = new Set(layout.water);
   const added: PlacedEntity[] = [];
-  let blocked = 0;
+  let blocked = withRails.blocked;
   for (const e of clipboardAt(clip, cx, cy)) {
     if (!canPlace(occ, water, e.name, e.x, e.y, e.direction).ok) {
       blocked++;
@@ -301,31 +386,58 @@ export function pasteClipboard(layout: Layout, clip: Clipboard, cx: number, cy: 
     added.push(placed);
     for (const [x, y] of tilesOf(entityRect(placed))) occ.set(tileKey(x, y), placed.id);
   }
-  if (!added.length) return { layout, placed: [], blocked };
-  return { layout: { ...layout, entities: [...layout.entities, ...added] }, placed: added.map((e) => e.id), blocked };
+  const placed = [...withRails.added, ...added.map((e) => e.id)];
+  if (!added.length) return { layout, placed, blocked };
+  return { layout: { ...layout, entities: [...layout.entities, ...added] }, placed, blocked };
 }
 
-/** Rotate a group of placed buildings 90° clockwise around their centre. Unchanged if anything would collide. */
+/** Rotate a group of placed buildings and rails 90° clockwise around their centre. Unchanged if anything would collide. */
 export function rotateGroup(layout: Layout, ids: readonly string[]): Layout {
   const set = new Set(ids);
   const group = layout.entities.filter((e) => set.has(e.id));
-  if (!group.length) return layout;
-  if (group.length === 1) return rotateEntity(layout, group[0].id);
-  const b = boundsOf(group);
-  const rotated = rotateClipboard(copyToClipboard(group)!);
+  const rails = (layout.rails ?? []).filter((r) => set.has(r.id));
+  if (!group.length && !rails.length) return layout;
+  if (group.length === 1 && !rails.length) return rotateEntity(layout, group[0]!.id);
+  const b = groupBounds(group, rails);
+  const rotated = rotateClipboard(copyToClipboard(group, rails)!);
   // keep the centre where it was
-  const ox = b.x + Math.floor((b.w - rotated.w) / 2);
-  const oy = b.y + Math.floor((b.h - rotated.h) / 2);
+  let ox = b.x + Math.floor((b.w - rotated.w) / 2);
+  let oy = b.y + Math.floor((b.h - rotated.h) / 2);
+  if (rails.length) {
+    ox = evenFloor(ox);
+    oy = evenFloor(oy);
+  }
+  const otherRails = (layout.rails ?? []).filter((r) => !set.has(r.id));
+  const movedRails = rails.map((r, i) => ({ ...moveRail(rotated.rails![i]!, ox, oy), id: r.id }));
   const others = layout.entities.filter((e) => !set.has(e.id));
-  const occ = buildOccupancy(others);
+  const occ = buildOccupancy(others, [...otherRails, ...movedRails]);
   const water = new Set(layout.water);
-  const moved = group.map((e, i) => ({ ...e, ...rotated.entities[i], id: e.id, x: rotated.entities[i].x + ox, y: rotated.entities[i].y + oy }));
+  const blockers = buildOccupancy(others);
+  for (const r of movedRails) if (railTiles(r).some((t) => blockers.has(t) || water.has(t))) return layout;
+  const moved = group.map((e, i) => ({ ...e, ...rotated.entities[i], id: e.id, x: rotated.entities[i]!.x + ox, y: rotated.entities[i]!.y + oy }));
   for (const e of moved) {
     if (!canPlace(occ, water, e.name, e.x, e.y, e.direction).ok) return layout;
     for (const [x, y] of tilesOf(entityRect(e))) occ.set(tileKey(x, y), e.id);
   }
   const byId = new Map(moved.map((e) => [e.id, e]));
-  return { ...layout, entities: layout.entities.map((e) => byId.get(e.id) ?? e) };
+  const railById = new Map(movedRails.map((r) => [r.id, r]));
+  const out: Layout = { ...layout, entities: layout.entities.map((e) => byId.get(e.id) ?? e) };
+  if (rails.length) out.rails = layout.rails!.map((r) => railById.get(r.id) ?? r);
+  return out;
+}
+
+/** Ids of rails that touch a tile rectangle (inclusive corners). */
+export function railsInBox(rails: readonly PlacedRail[] = [], ax: number, ay: number, bx: number, by: number): string[] {
+  const x0 = Math.min(ax, bx), x1 = Math.max(ax, bx);
+  const y0 = Math.min(ay, by), y1 = Math.max(ay, by);
+  return rails
+    .filter((r) =>
+      railTiles(r).some((k) => {
+        const [x, y] = k.split(',').map(Number);
+        return x! >= x0 && x! <= x1 && y! >= y0 && y! <= y1;
+      }),
+    )
+    .map((r) => r.id);
 }
 
 /** Ids of buildings that overlap a tile rectangle (inclusive corners). */

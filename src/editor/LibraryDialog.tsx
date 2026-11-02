@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { designFromEntities, designsFromString, designString, libraryBookString, type Design } from '../blueprint/library';
-import type { Clipboard, PlacedEntity } from './model';
+import type { Clipboard, PlacedEntity, PlacedRail } from './model';
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -18,10 +18,13 @@ export function LibraryDialog(props: {
   designs: Design[];
   onChange: (designs: Design[]) => void;
   selection: PlacedEntity[];
+  /** Selected rails, saved with the selection. */
+  selectionRails?: PlacedRail[];
   onPlace: (clip: Clipboard, name: string) => void;
   onClose: () => void;
 }) {
-  const { designs, onChange, selection, onPlace, onClose } = props;
+  const { designs, onChange, selection, selectionRails = [], onPlace, onClose } = props;
+  const picked = selection.length + selectionRails.length;
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
   const [importing, setImporting] = useState(false);
@@ -34,7 +37,7 @@ export function LibraryDialog(props: {
   }, [onClose]);
 
   const save = () => {
-    const d = designFromEntities(selection, name.trim() || `Design ${designs.length + 1}`);
+    const d = designFromEntities(selection, name.trim() || `Design ${designs.length + 1}`, selectionRails);
     if (!d) return;
     onChange([...designs, d]);
     setName('');
@@ -73,9 +76,9 @@ export function LibraryDialog(props: {
       <div className="bp-dialog lib-dialog" role="dialog" aria-modal="true">
         <h3>Designs</h3>
         <div className="bp-label">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={selection.length ? 'Name for the selection' : 'Select buildings to save them'} disabled={!selection.length} maxLength={200} onKeyDown={(e) => e.key === 'Enter' && save()} />
-          <button className="primary" onClick={save} disabled={!selection.length}>
-            Save selection{selection.length ? ` (${selection.length})` : ''}
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={picked ? 'Name for the selection' : 'Select buildings to save them'} disabled={!picked} maxLength={200} onKeyDown={(e) => e.key === 'Enter' && save()} />
+          <button className="primary" onClick={save} disabled={!picked}>
+            Save selection{picked ? ` (${picked})` : ''}
           </button>
         </div>
         {designs.length === 0 ? (

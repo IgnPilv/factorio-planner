@@ -5,6 +5,8 @@ import { Application, Container, Graphics, Text } from 'pixi.js';
 import { gameData } from '../data';
 import { ENTITIES, entityColor, isRotatable, shortLabel } from './catalog';
 import { entityRect, footprint, tileKey, type Direction, type Layout } from './model';
+import { centreLine, type Point, type RailEnd } from '../rails/geometry';
+import { railPiece, type PlacedRail } from './rails';
 
 export const TILE = 32;
 
@@ -36,6 +38,10 @@ export interface Ghost {
   brush?: { tiles: [number, number][]; color: number };
   /** selection rectangle being dragged, in tiles (inclusive) */
   box?: { x0: number; y0: number; x1: number; y1: number };
+  /** Track being planned or pasted. */
+  rails?: { rails: Omit<PlacedRail, 'id'>[]; ok: boolean };
+  /** Where new track starts, with its heading. */
+  railStart?: RailEnd;
 }
 
 /** Extra drawing for the electric and logistics views. Coordinates are in tiles. */
@@ -60,6 +66,7 @@ export class GridRenderer {
   private ground = new Graphics();
   private water = new Graphics();
   private grid = new Graphics();
+  private rails = new Graphics();
   private entities = new Container();
   private viewUnder = new Graphics();
   private viewOver = new Graphics();
@@ -88,7 +95,7 @@ export class GridRenderer {
       return;
     }
     host.appendChild(this.app.canvas);
-    this.world.addChild(this.ground, this.water, this.grid, this.viewUnder, this.entities, this.viewOver, this.overlay, this.ghostLayer);
+    this.world.addChild(this.ground, this.water, this.grid, this.rails, this.viewUnder, this.entities, this.viewOver, this.overlay, this.ghostLayer);
     this.app.stage.addChild(this.world);
     this.app.renderer.on('resize', () => this.drawView());
     this.ready = true;
@@ -142,9 +149,11 @@ export class GridRenderer {
   setLayout(layout: Layout) {
     const waterChanged = layout.water !== this.layout.water;
     const entitiesChanged = layout.entities !== this.layout.entities;
+    const railsChanged = layout.rails !== this.layout.rails;
     this.layout = layout;
     if (!this.ready) return;
     if (waterChanged) this.drawWater();
+    if (railsChanged) this.drawRails();
     if (entitiesChanged) this.drawEntities();
     this.drawOverlay();
     this.drawViewOverlay();
@@ -175,6 +184,7 @@ export class GridRenderer {
   private redrawAll() {
     this.drawView();
     this.drawWater();
+    this.drawRails();
     this.drawEntities();
     this.drawOverlay();
     this.drawViewOverlay();
@@ -237,6 +247,11 @@ export class GridRenderer {
       if (!set.has(tileKey(x + 1, y))) g.moveTo(X + TILE, Y).lineTo(X + TILE, Y + TILE);
     }
     g.stroke({ width: 4, color: COLORS.shore, alignment: 0.5 });
+  }
+
+  private drawRails() {
+    const g = this.rails.clear();
+    drawTrack(g, this.layout.rails ?? [], 1);
   }
 
   private drawEntities() {
@@ -355,13 +370,30 @@ export class GridRenderer {
       g.rect(r.x * TILE + 1, r.y * TILE + 1, r.w * TILE - 2, r.h * TILE - 2);
     }
     g.stroke({ width: 2, color: COLORS.selection });
+    for (const r of this.layout.rails ?? []) {
+      if (!this.selected.has(r.id)) continue;
+      polyline(g, centreLine(railPiece(r), 8));
+      g.stroke({ width: TILE * 1.4, color: COLORS.selection, alpha: 0.35, cap: 'round' });
+    }
   }
 
   private drawGhost() {
     for (const c of this.ghostLayer.removeChildren()) c.destroy();
     const g = new Graphics();
     this.ghostLayer.addChild(g);
-    const { brush, items, box } = this.ghost;
+    const { brush, items, box, rails, railStart } = this.ghost;
+    if (rails?.rails.length) {
+      drawTrack(g, rails.rails, 0.6);
+      for (const r of rails.rails) polyline(g, centreLine(railPiece(r), 8));
+      g.stroke({ width: 3, color: rails.ok ? COLORS.ok : COLORS.bad, alpha: 0.9 });
+    }
+    if (railStart) {
+      const a = (railStart.dir * Math.PI) / 8;
+      const [fx, fy] = [Math.sin(a), -Math.cos(a)];
+      const X = railStart.x * TILE, Y = railStart.y * TILE;
+      g.circle(X, Y, 5).fill({ color: COLORS.selection });
+      g.moveTo(X, Y).lineTo(X + fx * TILE * 1.5, Y + fy * TILE * 1.5).stroke({ width: 3, color: COLORS.selection });
+    }
     if (box) {
       const x0 = Math.min(box.x0, box.x1), y0 = Math.min(box.y0, box.y1);
       const w = Math.abs(box.x1 - box.x0) + 1, h = Math.abs(box.y1 - box.y0) + 1;
@@ -417,3 +449,41 @@ function drawChevrons(g: Graphics, px: number, py: number, d: Direction) {
   }
 }
 
+
+function polyline(g: Graphics, pts: Point[], off = 0) {
+  pts.forEach((p, i) => {
+    const a = pts[Math.max(0, i - 1)]!, b = pts[Math.min(pts.length - 1, i + 1)]!;
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+    const x = (p.x + nx * off) * TILE, y = (p.y + ny * off) * TILE;
+    if (i === 0) g.moveTo(x, y);
+    else g.lineTo(x, y);
+  });
+}
+
+/** Track: a ballast bed, sleepers, and two steel rails, all following the rail's centre line. */
+function drawTrack(g: Graphics, rails: readonly Omit<PlacedRail, 'id'>[], alpha: number) {
+  const lines = rails.map((r) => centreLine(railPiece(r), r.name === 'straight-rail' ? 2 : 10));
+  for (const pts of lines) polyline(g, pts);
+  g.stroke({ width: TILE * 1.5, color: 0x5d5547, alpha: 0.85 * alpha, cap: 'butt' });
+  // Sleepers about every half tile.
+  for (const pts of lines) {
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i]!, b = pts[i + 1]!;
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      const n = Math.max(1, Math.round(len / 0.5));
+      const ux = (b.x - a.x) / len, uy = (b.y - a.y) / len;
+      for (let k = 0; k < n; k++) {
+        const t = (k + 0.5) / n;
+        const cx = a.x + (b.x - a.x) * t, cy = a.y + (b.y - a.y) * t;
+        g.moveTo((cx - uy * 0.62) * TILE, (cy + ux * 0.62) * TILE).lineTo((cx + uy * 0.62) * TILE, (cy - ux * 0.62) * TILE);
+      }
+    }
+  }
+  g.stroke({ width: 4, color: 0x3b2f22, alpha });
+  for (const pts of lines) {
+    polyline(g, pts, 0.38);
+    polyline(g, pts, -0.38);
+  }
+  g.stroke({ width: 2.5, color: 0xb9bec4, alpha });
+}

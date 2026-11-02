@@ -326,18 +326,35 @@ describe('inserter filters, splitter settings and chest requests', () => {
 });
 
 describe('blueprints with rails', () => {
-  it('skips signals, stops and trains along with the rails', () => {
+  it('skips signals, stops and trains when some track cannot be read', () => {
     const { clipboard, unknown } = blueprintToClipboard({
       item: 'blueprint',
       version: encodeVersion(0, 18, 1),
       entities: [
-        { entity_number: 1, name: 'straight-rail', position: { x: 1, y: 1 } },
+        { entity_number: 1, name: 'curved-rail', position: { x: 1, y: 1 } },
         { entity_number: 2, name: 'rail-signal', position: { x: 2.5, y: 0.5 } },
         { entity_number: 3, name: 'roboport', position: { x: 10, y: 10 } },
         { entity_number: 4, name: 'advanced-substation', position: { x: 20, y: 20 } },
       ],
     });
     expect(clipboard!.entities.map((e) => e.name)).toEqual(['roboport']);
-    expect(unknown).toEqual({ 'straight-rail': 1, 'rail-signal': 1, 'advanced-substation': 1 });
+    expect(unknown).toEqual({ 'curved-rail (1.x diagonal or curve)': 1, 'rail-signal': 1, 'advanced-substation': 1 });
+  });
+
+  it('converts 1.x straight rails along an axis and keeps their signals', () => {
+    const { clipboard, unknown } = blueprintToClipboard({
+      item: 'blueprint',
+      version: encodeVersion(1, 1, 100),
+      entities: [
+        { entity_number: 1, name: 'straight-rail', position: { x: 1, y: 1 } },
+        { entity_number: 2, name: 'straight-rail', position: { x: 1, y: 3 } },
+        { entity_number: 3, name: 'rail-signal', position: { x: 2.5, y: 1.5 } },
+      ],
+    });
+    expect(unknown).toEqual({});
+    expect(clipboard!.rails).toHaveLength(2);
+    expect(clipboard!.entities.map((e) => e.name)).toEqual(['rail-signal']);
+    // East of a north-south track, a signal guards northbound trains, so it faces south.
+    expect(clipboard!.entities[0]!.direction).toBe(2);
   });
 });

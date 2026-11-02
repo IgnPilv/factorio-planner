@@ -22,6 +22,10 @@ import {
   starterLayout,
   tileKey,
   updateEntity,
+  addRails,
+  layoutOccupancy,
+  railsInBox,
+  clipboardRailsAt,
   type Direction,
   type Layout,
   type PlacedEntity,
@@ -39,6 +43,9 @@ import { computeUnlocks, entityUnlocked, recipeUnlocked } from './unlocks';
 import type { SearchHit } from './search';
 import { buildBadges, buildViewOverlay, type ViewMode } from './views';
 import { GridRenderer } from './renderer';
+import { planRail, railFromPiece, railStartAt, signalDirectionAt, trainStopAt } from './rails';
+import { newId as railId } from './model';
+import type { RailEnd } from '../rails/geometry';
 import { wikiIconUrl } from '../data';
 import './editor.css';
 
@@ -48,7 +55,8 @@ export type Tool =
   | { kind: 'water' }
   | { kind: 'land' }
   | { kind: 'erase' }
-  | { kind: 'paste' };
+  | { kind: 'paste' }
+  | { kind: 'rail' };
 
 const STORAGE_KEY = 'factorio-planner.layout.v1';
 const DIR_NAMES = ['north', 'east', 'south', 'west'];
@@ -63,11 +71,20 @@ function loadSaved(): Layout {
   return starterLayout();
 }
 
-/** Where a click at tile cx,cy would put a building (offshore pumps snap to the shore). */
+/** Where a click at tile cx,cy would put a building (offshore pumps snap to the shore, signals and stops to track). */
 function resolvePlacement(layout: Layout, name: string, dir: Direction, cx: number, cy: number) {
-  if (ENTITIES[name]?.kind === 'offshore-pump') {
-    const snapped = autoOrientOffshore(buildOccupancy(layout.entities), new Set(layout.water), cx, cy, dir);
+  const kind = ENTITIES[name]?.kind;
+  if (kind === 'offshore-pump') {
+    const snapped = autoOrientOffshore(layoutOccupancy(layout), new Set(layout.water), cx, cy, dir);
     if (snapped) return snapped;
+  }
+  if (kind === 'rail-signal' && layout.rails?.length) {
+    const d = signalDirectionAt(layout.rails, cx, cy, dir);
+    if (d !== null) return { x: cx, y: cy, direction: d as Direction };
+  }
+  if (kind === 'train-stop' && layout.rails?.length) {
+    const p = trainStopAt(layout.rails, cx, cy, dir);
+    if (p) return { x: p.x, y: p.y, direction: p.direction as Direction };
   }
   return { ...anchorForCursor(name, dir, cx, cy), direction: dir };
 }
@@ -118,6 +135,8 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
   const [clip, setClip] = useState<Clipboard | null>(null);
   const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [cursor, setCursor] = useState<[number, number] | null>(null);
+  /** Rail tool: where the next track starts (null until the first click). */
+  const [railFrom, setRailFrom] = useState<RailEnd | null>(null);
   const [message, setMessage] = useState<string>('');
   const [view, setView] = useState<ViewMode>('normal');
   const [showWires, setShowWires] = useState(() => readPref('wires', true));
@@ -136,8 +155,8 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
   const future = useRef<Layout[]>([]);
 
   // Latest values for the event handlers, which are bound once.
-  const st = useRef({ layout, tool, direction, brush, selection, cursor, clip });
-  st.current = { layout, tool, direction, brush, selection, cursor, clip };
+  const st = useRef({ layout, tool, direction, brush, selection, cursor, clip, railFrom });
+  st.current = { layout, tool, direction, brush, selection, cursor, clip, railFrom };
 
   /** Apply a change; `commit` false merges into the current undo step (drag strokes). */
   const apply = useCallback((next: Layout, commit = true) => {
@@ -250,11 +269,14 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
     }
     rendererRef.current?.setView(overlay);
   }, [view, layout.entities, power, polePreview, showPoleAreas, showWires, sim, robots, robotPreview, showRobots]);
-  useEffect(() => setMessage(''), [tool]);
+  useEffect(() => {
+    setMessage('');
+    setRailFrom(null);
+  }, [tool]);
 
   // ---- ghost preview -------------------------------------------------------
 
-  const occupancy = useMemo(() => buildOccupancy(layout.entities), [layout.entities]);
+  const occupancy = useMemo(() => buildOccupancy(layout.entities, layout.rails), [layout.entities, layout.rails]);
   const waterSet = useMemo(() => new Set(layout.water), [layout.water]);
 
   useEffect(() => {
@@ -273,11 +295,21 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
       r.setGhost({ items: [], brush: { tiles: [[cx, cy]], color: 0xff4d4d } });
     } else if (tool.kind === 'paste' && clip) {
       const items = clipboardAt(clip, cx, cy).map((e) => ({ ...e, ok: canPlace(occupancy, waterSet, e.name, e.x, e.y, e.direction).ok }));
-      r.setGhost({ items });
+      const rails = clipboardRailsAt(clip, cx, cy);
+      r.setGhost({ items, rails: rails.length ? { rails, ok: true } : undefined });
       const blocked = items.filter((i) => !i.ok).length;
       setMessage(blocked ? `${blocked} of ${items.length} buildings blocked` : '');
+    } else if (tool.kind === 'rail') {
+      if (!railFrom) {
+        r.setGhost({ items: [], railStart: railStartAt(layout.rails ?? [], cx, cy, direction * 4) });
+        return;
+      }
+      const plan = planRail(railFrom, cx + 0.5, cy + 0.5).map((p) => railFromPiece(p, ''));
+      const res = addRails({ ...layout, rails: [] }, plan);
+      r.setGhost({ items: [], rails: { rails: plan, ok: res.blocked === 0 }, railStart: railFrom });
+      setMessage(res.blocked ? `${res.blocked} rail piece${res.blocked === 1 ? '' : 's'} blocked by buildings or water` : '');
     } else r.setGhost({ items: [], box: box ?? undefined });
-  }, [cursor, tool, direction, brush, occupancy, waterSet, layout, clip, box]);
+  }, [cursor, tool, direction, brush, occupancy, waterSet, layout, clip, box, railFrom]);
 
   // ---- editing actions -----------------------------------------------------
 
@@ -285,17 +317,18 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
   const openBlueprintExport = useCallback(() => {
     const { layout: cur, selection: sel } = st.current;
     const chosen = sel.length ? cur.entities.filter((e) => sel.includes(e.id)) : cur.entities;
-    if (!chosen.length) {
+    const rails = sel.length ? (cur.rails ?? []).filter((r) => sel.includes(r.id)) : (cur.rails ?? []);
+    if (!chosen.length && !rails.length) {
       setMessage('Nothing to blueprint yet: place some buildings first.');
       return;
     }
-    setBpDialog({ kind: 'export', entities: chosen, scope: sel.length ? 'selection' : 'layout' });
+    setBpDialog({ kind: 'export', entities: chosen, rails, scope: sel.length ? 'selection' : 'layout' });
   }, []);
 
   const tryPlace = useCallback(
     (name: string, x: number, y: number, dir: Direction, commit: boolean): string | null => {
       const cur = st.current.layout;
-      const occ = buildOccupancy(cur.entities);
+      const occ = layoutOccupancy(cur);
       const check = canPlace(occ, new Set(cur.water), name, x, y, dir);
       if (!check.ok) {
         setMessage(check.reason);
@@ -317,7 +350,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
   const removeAt = useCallback(
     (tx: number, ty: number, commit: boolean) => {
       const cur = st.current.layout;
-      const id = buildOccupancy(cur.entities).get(tileKey(tx, ty));
+      const id = layoutOccupancy(cur).get(tileKey(tx, ty));
       if (!id) return false;
       apply(removeEntities(cur, [id]), commit);
       if (st.current.selection.includes(id)) setSelection((s) => s.filter((x) => x !== id));
@@ -329,8 +362,8 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
   const rotateHoveredOrSelected = useCallback(
     (reverse: boolean) => {
       const { tool: t, cursor: c, layout: cur, selection: sel, clip: cb } = st.current;
-      if (t.kind === 'build') {
-        if (!isRotatable(ENTITIES[t.name])) return;
+      if (t.kind === 'build' || t.kind === 'rail') {
+        if (t.kind === 'build' && !isRotatable(ENTITIES[t.name])) return;
         setDirection((d) => ((d + (reverse ? 3 : 1)) % 4) as Direction);
         return;
       }
@@ -341,7 +374,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
         return;
       }
       // A multi-selection turns as a group; otherwise the hovered building turns.
-      const hovered = c && buildOccupancy(cur.entities).get(tileKey(c[0], c[1]));
+      const hovered = c && layoutOccupancy(cur).get(tileKey(c[0], c[1]));
       const ids = sel.length > 1 || !hovered ? sel : [hovered];
       if (!ids.length) return;
       let next = rotateGroup(cur, ids);
@@ -390,6 +423,11 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
         drag = { mode: 'pan', lastX: ev.clientX, lastY: ev.clientY };
         return;
       }
+      if (ev.button === 2 && tl.kind === 'rail' && st.current.railFrom) {
+        // Right-click while laying track drops the current start, like the game.
+        setRailFrom(null);
+        return;
+      }
       if (ev.button === 2 || (ev.button === 0 && tl.kind === 'erase')) {
         // Right button removes, like mining in the game.
         past.current.push(st.current.layout);
@@ -411,15 +449,32 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
         future.current = [];
         drag = { mode: 'paint', on: tl.kind === 'water' };
         paint(t[0], t[1], drag.on);
+      } else if (tl.kind === 'rail') {
+        const cur = st.current.layout;
+        const from = st.current.railFrom;
+        if (!from) {
+          setRailFrom(railStartAt(cur.rails ?? [], t[0], t[1], dir * 4));
+          return;
+        }
+        const pieces = planRail(from, t[0] + 0.5, t[1] + 0.5);
+        if (!pieces.length) return;
+        const res = addRails(cur, pieces.map((p) => railFromPiece(p, railId())));
+        if (res.blocked) {
+          setMessage('Track blocked by buildings or water');
+          return;
+        }
+        apply(res.layout);
+        // Keep laying from where this track ended.
+        setRailFrom(pieces[pieces.length - 1]!.b);
       } else if (tl.kind === 'paste') {
         const cb = st.current.clip;
         if (!cb) return;
         const res = pasteClipboard(st.current.layout, cb, t[0], t[1]);
         apply(res.layout);
-        setMessage(res.blocked ? `Pasted ${res.placed.length}, ${res.blocked} blocked` : `Pasted ${res.placed.length} buildings`);
+        setMessage(res.blocked ? `Pasted ${res.placed.length}, ${res.blocked} blocked` : `Pasted ${res.placed.length} pieces`);
       } else {
         // Select: click picks a building (Shift adds), dragging draws a selection box.
-        const id = buildOccupancy(st.current.layout.entities).get(tileKey(t[0], t[1])) ?? null;
+        const id = layoutOccupancy(st.current.layout).get(tileKey(t[0], t[1])) ?? null;
         if (ev.shiftKey && id) setSelection((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
         else if (!ev.shiftKey) setSelected(id);
         drag = { mode: 'box', x0: t[0], y0: t[1], add: ev.shiftKey };
@@ -482,7 +537,8 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
         const t = tileAt(ev);
         const d = drag;
         if (t && (t[0] !== d.x0 || t[1] !== d.y0)) {
-          const ids = entitiesInBox(st.current.layout.entities, d.x0, d.y0, t[0], t[1]);
+          const cur = st.current.layout;
+          const ids = [...entitiesInBox(cur.entities, d.x0, d.y0, t[0], t[1]), ...railsInBox(cur.rails, d.x0, d.y0, t[0], t[1])];
           setSelection((s) => (d.add ? [...new Set([...s, ...ids])] : ids));
         }
         setBox(null);
@@ -523,7 +579,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
       } else if ((ev.ctrlKey || ev.metaKey) && (k === 'c' || k === 'x')) {
         const { selection: sel, layout: cur } = st.current;
         const ents = cur.entities.filter((e) => sel.includes(e.id));
-        const cb = copyToClipboard(ents);
+        const cb = copyToClipboard(ents, (cur.rails ?? []).filter((r) => sel.includes(r.id)));
         if (!cb) return;
         ev.preventDefault();
         setClip(cb);
@@ -541,7 +597,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
         openBlueprintExport();
       } else if ((ev.ctrlKey || ev.metaKey) && k === 'a') {
         ev.preventDefault();
-        setSelection(st.current.layout.entities.map((e) => e.id));
+        setSelection([...st.current.layout.entities.map((e) => e.id), ...(st.current.layout.rails ?? []).map((r) => r.id)]);
       } else if ((ev.ctrlKey || ev.metaKey) && k === 'y') {
         ev.preventDefault();
         redo();
@@ -550,14 +606,20 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
       } else if (k === 'q') {
         // Pipette: pick the hovered building, or empty the hand.
         const { cursor: c, layout: cur, tool: tl } = st.current;
-        const id = c && buildOccupancy(cur.entities).get(tileKey(c[0], c[1]));
+        const id = c && layoutOccupancy(cur).get(tileKey(c[0], c[1]));
         const e = id ? cur.entities.find((x) => x.id === id) : undefined;
-        if (e && !(tl.kind === 'build' && tl.name === e.name && tl.recipe === e.recipe)) {
+        if (id && !e && cur.rails?.some((r) => r.id === id)) {
+          setTool(tl.kind === 'rail' ? { kind: 'select' } : { kind: 'rail' });
+        } else if (e && !(tl.kind === 'build' && tl.name === e.name && tl.recipe === e.recipe)) {
           // Like the game's pipette, keep the recipe and modules of the picked machine.
           setTool({ kind: 'build', name: e.name, recipe: e.recipe, modules: e.modules });
           setDirection(e.direction);
         } else setTool({ kind: 'select' });
       } else if (k === 'escape') {
+        if (st.current.tool.kind === 'rail' && st.current.railFrom) {
+          setRailFrom(null);
+          return;
+        }
         setTool({ kind: 'select' });
         setSelected(null);
       } else if (k === 'delete' || k === 'backspace') {
@@ -680,6 +742,17 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
         {HOTBAR_GROUPS.map((g) => (
           <div className="palette-group" key={g.title}>
             <h3>{g.title}</h3>
+            {g.title === 'Trains' && (
+              <div className="tool-row">
+                <ToolButton
+                  active={tool.kind === 'rail'}
+                  onClick={() => setTool(tool.kind === 'rail' ? { kind: 'select' } : { kind: 'rail' })}
+                  title="Lay track: click to start (or continue a track end), click again to build up to the cursor. R turns the start, Esc or right-click drops it."
+                >
+                  Rail
+                </ToolButton>
+              </div>
+            )}
             <div className="palette-grid">
               {g.names.map((n) => {
                 const def = ENTITIES[n];
@@ -753,7 +826,12 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
           <span className="sep" />
           {tool.kind === 'paste' && clip && (
             <span className="hand">
-              Pasting <b>{clip.entities.length}</b> buildings (R rotate, Esc cancel)
+              Pasting <b>{clip.entities.length}</b> buildings{clip.rails?.length ? <> and <b>{clip.rails.length}</b> rails</> : null} (R rotate, Esc cancel)
+            </span>
+          )}
+          {tool.kind === 'rail' && (
+            <span className="hand">
+              {railFrom ? <>Laying track: click to build up to the cursor (Esc to stop)</> : <>Rail: click to start heading {DIR_NAMES[direction]} (R), or click a track end</>}
             </span>
           )}
           {hand && (
@@ -768,7 +846,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
         <div className="editor-status">
           <span>{cursor ? `x ${cursor[0]}, y ${cursor[1]}` : ' '}</span>
           <span>
-            {layout.entities.length} buildings · {layout.water.length} water tiles
+            {layout.entities.length} buildings{layout.rails?.length ? ` · ${layout.rails.length} rails` : ''} · {layout.water.length} water tiles
             {robots.roboports.length > 0 && ` · ${robots.roboports.length} roboports in ${robots.networks.length} network${robots.networks.length === 1 ? '' : 's'}`}
           </span>
           <span className="msg">{message}</span>
@@ -813,13 +891,13 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
           </>
         ) : selection.length > 1 ? (
           <>
-            <h3>{selection.length} buildings selected</h3>
+            <h3>{selection.length} selected</h3>
             <p className="muted small">Ctrl+C copy · Ctrl+X cut · R rotate · Delete remove · Shift+click to add or drop one</p>
             <div className="tool-row">
               <button onClick={() => apply(rotateGroup(layout, selection))}>Rotate</button>
               <button
                 onClick={() => {
-                  setClip(copyToClipboard(layout.entities.filter((e) => selection.includes(e.id))));
+                  setClip(copyToClipboard(layout.entities.filter((e) => selection.includes(e.id)), (layout.rails ?? []).filter((r) => selection.includes(r.id))));
                   setTool({ kind: 'paste' });
                 }}
               >
@@ -836,7 +914,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
                 Remove
               </button>
             </div>
-            <SelectionCounts ids={selection} entities={layout.entities} />
+            <SelectionCounts ids={selection} entities={layout.entities} rails={layout.rails} />
             <SelectionFlows sim={sim} ids={selection} />
           </>
         ) : (
@@ -856,9 +934,10 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
           designs={designs}
           onChange={setDesigns}
           selection={layout.entities.filter((e) => selection.includes(e.id))}
+          selectionRails={(layout.rails ?? []).filter((r) => selection.includes(r.id))}
           onPlace={(cb, name) => {
             setLibraryOpen(false);
-            importBlueprint(cb, `"${name}", ${cb.entities.length} buildings`);
+            importBlueprint(cb, `"${name}", ${cb.entities.length} buildings${cb.rails?.length ? `, ${cb.rails.length} rails` : ''}`);
           }}
           onClose={() => setLibraryOpen(false)}
         />
@@ -875,15 +954,17 @@ function ToolButton(props: { active: boolean; onClick: () => void; title: string
   );
 }
 
-function SelectionCounts({ ids, entities }: { ids: string[]; entities: PlacedEntity[] }) {
+function SelectionCounts({ ids, entities, rails = [] }: { ids: string[]; entities: PlacedEntity[]; rails?: Layout['rails'] }) {
   const counts = new Map<string, number>();
   const set = new Set(ids);
   for (const e of entities) if (set.has(e.id)) counts.set(e.name, (counts.get(e.name) ?? 0) + 1);
+  const nRails = rails.filter((r) => set.has(r.id)).length;
+  if (nRails) counts.set('rail', nRails);
   return (
     <ul className="flow-list">
       {[...counts].sort((a, b) => b[1] - a[1]).map(([name, n]) => (
         <li key={name}>
-          {n} × {ENTITIES[name]?.displayName ?? name}
+          {n} × {name === 'rail' ? 'Rail' : (ENTITIES[name]?.displayName ?? name)}
         </li>
       ))}
     </ul>
