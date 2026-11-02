@@ -122,6 +122,7 @@ for (const p of Object.values(raw.recipe ?? {})) {
     allowProductivity: !!p.allow_productivity, enabledByDefault: p.enabled !== false,
     subgroup: p.subgroup ?? (results.length === 1 ? items[results[0].name]?.subgroup : undefined),
     order: p.order, maximumProductivity: p.maximum_productivity,
+    icon: p.icon ?? items[p.main_product ?? (results.length === 1 ? results[0].name : '')]?.icon,
   });
 }
 
@@ -268,6 +269,19 @@ for (const p of Object.values(raw.module ?? {})) {
 }
 
 // ---------- technologies ----------
+// Leveled techs set `icons = util.technology_icon_constant_*(path)`, a function call the
+// table reader can't evaluate. Recover the base image path from the source text instead.
+const techIcons = {};
+{
+  const src = fs.readFileSync(path.join(protoDir, 'technology.lua'), 'utf8');
+  const locals = Object.fromEntries([...src.matchAll(/^local\s+(\w+)\s*=\s*"([^"]+\.png)"/gm)].map((m) => [m[1], m[2]]));
+  const marks = [...src.matchAll(/\bname\s*=\s*"([\w-]+)"|\bicons\s*=\s*util\.technology_icon_\w+\(\s*(?:"([^"]+)"|(\w+))/g)];
+  let last;
+  for (const m of marks) {
+    if (m[1]) last = m[1];
+    else if (last && !techIcons[last]) techIcons[last] = m[2] ?? locals[m[3]];
+  }
+}
 const RATE_EFFECTS = new Set(['mining-drill-productivity-bonus', 'change-recipe-productivity', 'laboratory-speed',
   'laboratory-productivity', 'inserter-stack-size-bonus', 'bulk-inserter-capacity-bonus', 'belt-stack-size-bonus']);
 const technologies = {};
@@ -283,7 +297,7 @@ for (const p of Object.values(raw.technology ?? {})) {
   technologies[p.name] = clean({
     name: p.name, displayName: displayName(p.name), prerequisites: arr(p.prerequisites) ?? [], effects,
     unlocksRecipes: effects.filter((x) => x.type === 'unlock-recipe').map((x) => x.recipe),
-    maxLevel: p.max_level, icon: p.icon, wikiUrl: wikiUrl(p.name.replace(/-\d+$/, '')),
+    maxLevel: p.max_level, icon: p.icon ?? techIcons[p.name], wikiUrl: wikiUrl(p.name.replace(/-\d+$/, '')),
     cost: u ? clean({ count: u.count, countFormula: u.count_formula, time: u.time,
       ingredients: (arr(u.ingredients) ?? []).map((i) => ({ name: i[0], type: 'item', amount: i[1] })) }) : undefined,
     affectsRates: effects.some((x) => RATE_EFFECTS.has(x.type)),
