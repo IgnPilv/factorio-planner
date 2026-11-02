@@ -12,6 +12,7 @@
     "extract-data": "node scripts/extract-data.mjs"
   },
   "dependencies": {
+    "pixi.js": "^8.22.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "yalps": "^0.6.3"
