@@ -42,6 +42,9 @@ describe('block grid in the editor', () => {
       expect(layout.blockGrid).toMatchObject({ pitch: p.spec.pitch });
       const check = checkLayoutRails(layout)!;
       expect(check.issues.filter((i) => i.message.includes('corridor'))).toEqual([]);
+      // The patch is cut at its outer edge: those ends are open, not dead.
+      expect(check.deadEnds).toEqual([]);
+      expect(check.edgeEnds.length).toBeGreaterThan(0);
     }
   });
 

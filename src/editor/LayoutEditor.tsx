@@ -315,6 +315,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL, incoming }
       // Track problems: orange dots at dead ends, red or yellow at signal and stop problems.
       const dots = [
         ...railCheck.deadEnds.map((p) => ({ x: p.x, y: p.y, color: 0xff9f1a, r: 5 })),
+        ...railCheck.edgeEnds.map((p) => ({ x: p.x, y: p.y, color: 0x6fb7ff, r: 4 })),
         ...railCheck.issues.map((i) => ({ x: i.at.x, y: i.at.y, color: i.severity === 'error' ? 0xff4d4d : 0xffd34d, r: 6 })),
       ];
       overlay.dots = [...(overlay.dots ?? []), ...dots];
@@ -1080,6 +1081,7 @@ function RailSummary({ check, onSelect }: { check: RailCheck; onSelect: (id: str
       <p className="small">
         {check.pieces} rail piece{check.pieces === 1 ? '' : 's'} · {check.signals} signal{check.signals === 1 ? '' : 's'} · {check.blocks} block{check.blocks === 1 ? '' : 's'}
         {check.deadEnds.length > 0 && <> · <span className="warn">{check.deadEnds.length} dead end{check.deadEnds.length === 1 ? '' : 's'}</span> (orange dots)</>}
+        {check.edgeEnds.length > 0 && <> · {check.edgeEnds.length} open at the grid edge (blue dots, where the next blocks join)</>}
       </p>
       {shown.length > 0 && (
         <ul className="flow-list small">

@@ -22,6 +22,8 @@ export interface RailCheck {
   signals: number;
   blocks: number;
   deadEnds: Point[];
+  /** With a block grid: track ends on the outer edge of the track, where the next blocks would join. Not counted as dead ends. */
+  edgeEnds: Point[];
   issues: RailCheckIssue[];
 }
 
@@ -100,5 +102,25 @@ export function checkLayoutRails(layout: Layout): RailCheck | null {
   for (const i of report.issues)
     issues.push({ severity: i.severity, message: i.message, at: i.at ?? { x: 0, y: 0 }, entityId: i.signalId });
 
-  return { pieces: pieces.length, signals: signalEnts.length, blocks: report.blocks.length, deadEnds: net.deadEnds.map((e) => ({ x: e.x, y: e.y })), issues };
+  // With a block grid, ends on the outer edge of all track continue into blocks
+  // not drawn here, the way the City blocks patch is cut.
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of pieces)
+    for (const e of [p.a, p.b]) {
+      x0 = Math.min(x0, e.x); y0 = Math.min(y0, e.y);
+      x1 = Math.max(x1, e.x); y1 = Math.max(y1, e.y);
+    }
+  // The outermost grid lines the track reaches: ends on or beyond them are at the edge.
+  const line = (v: number, up: boolean) => (grid ? (up ? Math.ceil : Math.floor)((v - grid.offset) / grid.pitch) * grid.pitch + grid.offset : 0);
+  const [gx0, gy0, gx1, gy1] = [line(x0, true), line(y0, true), line(x1, false), line(y1, false)];
+  const atEdge = (e: Point) => !!grid && (e.x <= gx0 || e.x >= gx1 || e.y <= gy0 || e.y >= gy1);
+  const ends = net.deadEnds.map((e) => ({ x: e.x, y: e.y }));
+  return {
+    pieces: pieces.length,
+    signals: signalEnts.length,
+    blocks: report.blocks.length,
+    deadEnds: ends.filter((e) => !atEdge(e)),
+    edgeEnds: ends.filter(atEdge),
+    issues,
+  };
 }
