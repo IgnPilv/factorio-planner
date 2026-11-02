@@ -114,3 +114,42 @@ describe('machine settings', () => {
     expect(mods).not.toContain('productivity-module');
   });
 });
+
+describe('copy, paste and group rotation', () => {
+  it('copies relative to the bounding box and pastes centred on the cursor', async () => {
+    const { copyToClipboard, pasteClipboard } = await import('../src/editor/model');
+    let l = place(emptyLayout(), 'assembling-machine-1', 0, 0).layout;
+    l = place(l, 'inserter', 3, 1, 1).layout;
+    const clip = copyToClipboard(l.entities)!;
+    expect(clip).toMatchObject({ w: 4, h: 3 });
+    const pasted = pasteClipboard(l, clip, 11, 11);
+    expect(pasted.blocked).toBe(0);
+    expect(pasted.layout.entities).toHaveLength(4);
+    const again = pasteClipboard(pasted.layout, clip, 11, 11);
+    expect(again.blocked).toBe(2);
+  });
+
+  it('rotates a clipboard: a 3x5 engine becomes 5x3 and positions turn clockwise', async () => {
+    const { copyToClipboard, rotateClipboard } = await import('../src/editor/model');
+    let l = place(emptyLayout(), 'steam-engine', 0, 0).layout; // 3x5
+    l = place(l, 'pipe', 3, 0).layout; // to the right of the engine's top
+    const r = rotateClipboard(copyToClipboard(l.entities)!);
+    expect(r).toMatchObject({ w: 5, h: 4 });
+    const engine = r.entities.find((e) => e.name === 'steam-engine')!;
+    const pipe = r.entities.find((e) => e.name === 'pipe')!;
+    expect(engine).toMatchObject({ x: 0, y: 0, direction: 1 });
+    expect(pipe).toMatchObject({ x: 4, y: 3 }); // top-right goes to bottom-right
+  });
+
+  it('rotates a selection in place and refuses when blocked', async () => {
+    const { rotateGroup } = await import('../src/editor/model');
+    let l = place(emptyLayout(), 'transport-belt', 0, 0).layout;
+    l = place(l, 'transport-belt', 1, 0).layout;
+    l = place(l, 'transport-belt', 2, 0).layout;
+    const ids = l.entities.map((e) => e.id);
+    const r = rotateGroup(l, ids);
+    expect(r.entities.map((e) => [e.x, e.y, e.direction])).toEqual([[1, -1, 1], [1, 0, 1], [1, 1, 1]]);
+    const blocked = place(l, 'pipe', 1, 1).layout;
+    expect(rotateGroup(blocked, ids)).toBe(blocked);
+  });
+});

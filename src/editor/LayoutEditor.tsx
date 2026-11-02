@@ -6,6 +6,13 @@ import {
   brushTiles,
   buildOccupancy,
   canPlace,
+  clipboardAt,
+  copyToClipboard,
+  entitiesInBox,
+  pasteClipboard,
+  rotateClipboard,
+  rotateGroup,
+  type Clipboard,
   lineTiles,
   newId,
   parseLayout,
@@ -20,16 +27,23 @@ import {
   type PlacedEntity,
 } from './model';
 import { MachineSettings } from './MachineSettings';
+import { computeLayoutRates } from '../calc';
+import { gameData } from '../data';
+import { MachineRates, PowerSummary, ProductionSummary, QuickSearch } from './Panels';
+import { analysePower, poleInfo } from './power';
+import type { SearchHit } from './search';
+import { buildBadges, buildViewOverlay, type ViewMode } from './views';
 import { GridRenderer } from './renderer';
 import { wikiIconUrl } from '../data';
 import './editor.css';
 
 export type Tool =
   | { kind: 'select' }
-  | { kind: 'build'; name: string }
+  | { kind: 'build'; name: string; recipe?: string; modules?: string[] }
   | { kind: 'water' }
   | { kind: 'land' }
-  | { kind: 'erase' };
+  | { kind: 'erase' }
+  | { kind: 'paste' };
 
 const STORAGE_KEY = 'factorio-planner.layout.v1';
 const DIR_NAMES = ['north', 'east', 'south', 'west'];
@@ -53,14 +67,21 @@ function resolvePlacement(layout: Layout, name: string, dir: Direction, cx: numb
   return { ...anchorForCursor(name, dir, cx, cy), direction: dir };
 }
 
+/**
+ * Until the research panel lands, treat every recipe as unlocked but give no
+ * rate bonuses (techs that change rates stay off).
+ */
+const UNLOCK_ALL = Object.fromEntries(Object.values(gameData.technologies).filter((t) => !t.affectsRates).map((t) => [t.name, 1]));
+
+const VIEW_LABELS: Record<ViewMode, string> = { normal: 'Normal', electric: 'Electric', logistics: 'Logistics' };
+const VIEW_ORDER: ViewMode[] = ['normal', 'electric', 'logistics'];
+
 export interface LayoutEditorProps {
-  /** Optional per-entity badge text (e.g. "45/min") from the rate engine. */
-  badges?: Record<string, string>;
   /** Called whenever the layout changes, so other panels can react. */
   onLayoutChange?: (layout: Layout) => void;
 }
 
-export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
+export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<GridRenderer | null>(null);
 
@@ -68,17 +89,22 @@ export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
   const [tool, setTool] = useState<Tool>({ kind: 'select' });
   const [direction, setDirection] = useState<Direction>(0);
   const [brush, setBrush] = useState(3);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selection, setSelection] = useState<string[]>([]);
+  const setSelected = useCallback((id: string | null) => setSelection(id ? [id] : []), []);
+  const selected = selection.length === 1 ? selection[0] : null;
+  const [clip, setClip] = useState<Clipboard | null>(null);
+  const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [cursor, setCursor] = useState<[number, number] | null>(null);
   const [message, setMessage] = useState<string>('');
+  const [view, setView] = useState<ViewMode>('normal');
 
   // Undo/redo history of whole layouts (cheap: arrays are shared structurally).
   const past = useRef<Layout[]>([]);
   const future = useRef<Layout[]>([]);
 
   // Latest values for the event handlers, which are bound once.
-  const st = useRef({ layout, tool, direction, brush, selected, cursor });
-  st.current = { layout, tool, direction, brush, selected, cursor };
+  const st = useRef({ layout, tool, direction, brush, selection, cursor, clip });
+  st.current = { layout, tool, direction, brush, selection, cursor, clip };
 
   /** Apply a change; `commit` false merges into the current undo step (drag strokes). */
   const apply = useCallback((next: Layout, commit = true) => {
@@ -135,8 +161,29 @@ export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
     onLayoutChange?.(layout);
   }, [layout, onLayoutChange]);
 
-  useEffect(() => rendererRef.current?.setSelection(selected ? [selected] : []), [selected, layout]);
-  useEffect(() => rendererRef.current?.setBadges(badges ?? {}), [badges]);
+  useEffect(() => rendererRef.current?.setSelection(selection), [selection, layout]);
+  // ---- rates, power and views ---------------------------------------------
+
+  const rates = useMemo(() => computeLayoutRates(layout, gameData, UNLOCK_ALL), [layout]);
+  const power = useMemo(() => analysePower(layout.entities, rates), [layout.entities, rates]);
+  useEffect(() => rendererRef.current?.setBadges(buildBadges(view, layout.entities, rates)), [view, layout.entities, rates]);
+  // While a pole is in hand (or one is selected) show supply areas and the wires it would make.
+  const polePreview = useMemo(() => {
+    if (tool.kind === 'build' && ENTITIES[tool.name]?.kind === 'pole' && cursor) {
+      const p = resolvePlacement(layout, tool.name, direction, cursor[0], cursor[1]);
+      return poleInfo({ id: '__ghost', name: tool.name, ...p });
+    }
+    if (selected) {
+      const e = layout.entities.find((x) => x.id === selected);
+      if (e && ENTITIES[e.name]?.kind === 'pole') return poleInfo(e);
+    }
+    return null;
+  }, [tool, cursor, direction, layout, selected]);
+  const showPoleAreas = polePreview !== null;
+  useEffect(
+    () => rendererRef.current?.setView(buildViewOverlay(view, layout.entities, power, { polePreview, showPoleAreas })),
+    [view, layout.entities, power, polePreview, showPoleAreas],
+  );
   useEffect(() => setMessage(''), [tool]);
 
   // ---- ghost preview -------------------------------------------------------
@@ -158,8 +205,13 @@ export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
       r.setGhost({ items: [], brush: { tiles: brushTiles(cx, cy, brush), color: tool.kind === 'water' ? 0x4fa3ff : 0x7fbf5f } });
     } else if (tool.kind === 'erase') {
       r.setGhost({ items: [], brush: { tiles: [[cx, cy]], color: 0xff4d4d } });
-    } else r.setGhost({ items: [] });
-  }, [cursor, tool, direction, brush, occupancy, waterSet, layout]);
+    } else if (tool.kind === 'paste' && clip) {
+      const items = clipboardAt(clip, cx, cy).map((e) => ({ ...e, ok: canPlace(occupancy, waterSet, e.name, e.x, e.y, e.direction).ok }));
+      r.setGhost({ items });
+      const blocked = items.filter((i) => !i.ok).length;
+      setMessage(blocked ? `${blocked} of ${items.length} buildings blocked` : '');
+    } else r.setGhost({ items: [], box: box ?? undefined });
+  }, [cursor, tool, direction, brush, occupancy, waterSet, layout, clip, box]);
 
   // ---- editing actions -----------------------------------------------------
 
@@ -173,7 +225,12 @@ export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
         return null;
       }
       const id = newId();
+      const t = st.current.tool;
       const e: PlacedEntity = { id, name, x, y, direction: dir };
+      if (t.kind === 'build' && t.name === name) {
+        if (t.recipe) e.recipe = t.recipe;
+        if (t.modules?.length) e.modules = [...t.modules];
+      }
       apply({ ...cur, entities: [...cur.entities, e] }, commit);
       return id;
     },
@@ -186,7 +243,7 @@ export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
       const id = buildOccupancy(cur.entities).get(tileKey(tx, ty));
       if (!id) return false;
       apply(removeEntities(cur, [id]), commit);
-      if (st.current.selected === id) setSelected(null);
+      if (st.current.selection.includes(id)) setSelection((s) => s.filter((x) => x !== id));
       return true;
     },
     [apply],
@@ -194,16 +251,24 @@ export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
 
   const rotateHoveredOrSelected = useCallback(
     (reverse: boolean) => {
-      const { tool: t, cursor: c, layout: cur, selected: sel } = st.current;
+      const { tool: t, cursor: c, layout: cur, selection: sel, clip: cb } = st.current;
       if (t.kind === 'build') {
         if (!isRotatable(ENTITIES[t.name])) return;
         setDirection((d) => ((d + (reverse ? 3 : 1)) % 4) as Direction);
         return;
       }
-      const id = (c && buildOccupancy(cur.entities).get(tileKey(c[0], c[1]))) || sel;
-      if (!id) return;
-      let next = rotateEntity(cur, id);
-      if (reverse) next = rotateEntity(rotateEntity(next, id), id);
+      if (t.kind === 'paste' && cb) {
+        let next = rotateClipboard(cb);
+        if (reverse) next = rotateClipboard(rotateClipboard(next));
+        setClip(next);
+        return;
+      }
+      // A multi-selection turns as a group; otherwise the hovered building turns.
+      const hovered = c && buildOccupancy(cur.entities).get(tileKey(c[0], c[1]));
+      const ids = sel.length > 1 || !hovered ? sel : [hovered];
+      if (!ids.length) return;
+      let next = rotateGroup(cur, ids);
+      if (reverse) next = rotateGroup(rotateGroup(next, ids), ids);
       if (next === cur) setMessage('No room to rotate');
       apply(next);
     },
@@ -219,6 +284,7 @@ export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
       | { mode: 'build'; name: string; lastTile: [number, number]; lastId: string | null; dir: Direction; moved: boolean }
       | { mode: 'paint'; on: boolean }
       | { mode: 'erase' }
+      | { mode: 'box'; x0: number; y0: number; add: boolean }
       | null = null;
     let spaceDown = false;
 
@@ -268,10 +334,18 @@ export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
         future.current = [];
         drag = { mode: 'paint', on: tl.kind === 'water' };
         paint(t[0], t[1], drag.on);
+      } else if (tl.kind === 'paste') {
+        const cb = st.current.clip;
+        if (!cb) return;
+        const res = pasteClipboard(st.current.layout, cb, t[0], t[1]);
+        apply(res.layout);
+        setMessage(res.blocked ? `Pasted ${res.placed.length}, ${res.blocked} blocked` : `Pasted ${res.placed.length} buildings`);
       } else {
+        // Select: click picks a building (Shift adds), dragging draws a selection box.
         const id = buildOccupancy(st.current.layout.entities).get(tileKey(t[0], t[1])) ?? null;
-        setSelected(id);
-        if (!id) drag = { mode: 'pan', lastX: ev.clientX, lastY: ev.clientY };
+        if (ev.shiftKey && id) setSelection((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+        else if (!ev.shiftKey) setSelected(id);
+        drag = { mode: 'box', x0: t[0], y0: t[1], add: ev.shiftKey };
       }
     };
 
@@ -289,6 +363,10 @@ export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
         return;
       }
       if (!t) return;
+      if (drag.mode === 'box') {
+        if (t[0] !== drag.x0 || t[1] !== drag.y0) setBox({ x0: drag.x0, y0: drag.y0, x1: t[0], y1: t[1] });
+        return;
+      }
       if (drag.mode === 'paint') return paint(t[0], t[1], drag.on);
       if (drag.mode === 'erase') return void removeAt(t[0], t[1], false);
       // build drag
@@ -323,6 +401,17 @@ export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
 
     const onUp = (ev: PointerEvent) => {
       if (host.hasPointerCapture(ev.pointerId)) host.releasePointerCapture(ev.pointerId);
+      if (drag?.mode === 'box') {
+        const t = tileAt(ev);
+        const d = drag;
+        if (t && (t[0] !== d.x0 || t[1] !== d.y0)) {
+          const ids = entitiesInBox(st.current.layout.entities, d.x0, d.y0, t[0], t[1]);
+          setSelection((s) => (d.add ? [...new Set([...s, ...ids])] : ids));
+        }
+        setBox(null);
+        drag = null;
+        return;
+      }
       if (drag && drag.mode !== 'pan') {
         // Drop the undo step if the stroke changed nothing.
         if (past.current[past.current.length - 1] === st.current.layout) past.current.pop();
@@ -354,6 +443,25 @@ export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
         ev.preventDefault();
         if (ev.shiftKey) redo();
         else undo();
+      } else if ((ev.ctrlKey || ev.metaKey) && (k === 'c' || k === 'x')) {
+        const { selection: sel, layout: cur } = st.current;
+        const ents = cur.entities.filter((e) => sel.includes(e.id));
+        const cb = copyToClipboard(ents);
+        if (!cb) return;
+        ev.preventDefault();
+        setClip(cb);
+        if (k === 'x') {
+          apply(removeEntities(cur, sel));
+          setSelection([]);
+        }
+        setTool({ kind: 'paste' });
+      } else if ((ev.ctrlKey || ev.metaKey) && k === 'v') {
+        if (!st.current.clip) return;
+        ev.preventDefault();
+        setTool({ kind: 'paste' });
+      } else if ((ev.ctrlKey || ev.metaKey) && k === 'a') {
+        ev.preventDefault();
+        setSelection(st.current.layout.entities.map((e) => e.id));
       } else if ((ev.ctrlKey || ev.metaKey) && k === 'y') {
         ev.preventDefault();
         redo();
@@ -364,19 +472,22 @@ export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
         const { cursor: c, layout: cur, tool: tl } = st.current;
         const id = c && buildOccupancy(cur.entities).get(tileKey(c[0], c[1]));
         const e = id ? cur.entities.find((x) => x.id === id) : undefined;
-        if (e && !(tl.kind === 'build' && tl.name === e.name)) {
-          setTool({ kind: 'build', name: e.name });
+        if (e && !(tl.kind === 'build' && tl.name === e.name && tl.recipe === e.recipe)) {
+          // Like the game's pipette, keep the recipe and modules of the picked machine.
+          setTool({ kind: 'build', name: e.name, recipe: e.recipe, modules: e.modules });
           setDirection(e.direction);
         } else setTool({ kind: 'select' });
       } else if (k === 'escape') {
         setTool({ kind: 'select' });
         setSelected(null);
       } else if (k === 'delete' || k === 'backspace') {
-        const sel = st.current.selected;
-        if (sel) {
-          apply(removeEntities(st.current.layout, [sel]));
-          setSelected(null);
+        const sel = st.current.selection;
+        if (sel.length) {
+          apply(removeEntities(st.current.layout, sel));
+          setSelection([]);
         }
+      } else if (k === 'v' && !ev.ctrlKey && !ev.metaKey) {
+        setView((v) => VIEW_ORDER[(VIEW_ORDER.indexOf(v) + 1) % VIEW_ORDER.length]);
       } else if (k === 'w' && !ev.ctrlKey) setTool({ kind: 'water' });
       else if (k === 'e' && !ev.ctrlKey) setTool({ kind: 'erase' });
       else if (k === '[' || k === '-') setBrush((b) => Math.max(1, b - 1));
@@ -431,10 +542,17 @@ export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
   const sel = selected ? layout.entities.find((e) => e.id === selected) : undefined;
   const selDef = sel ? ENTITIES[sel.name] : undefined;
   const hand = tool.kind === 'build' ? ENTITIES[tool.name] : undefined;
+  const handRecipe = tool.kind === 'build' && tool.recipe ? (gameData.recipes[tool.recipe]?.displayName ?? gameData.resources[tool.recipe]?.displayName) : undefined;
+
+  const pickHit = (hit: SearchHit) => {
+    setTool({ kind: 'build', name: hit.building, recipe: hit.recipe });
+    setSelected(null);
+  };
 
   return (
     <div className="editor">
       <aside className="editor-palette">
+        <QuickSearch onPick={pickHit} />
         <div className="tool-row">
           <ToolButton active={tool.kind === 'select'} onClick={() => setTool({ kind: 'select' })} title="Select and pan (Esc)">Select</ToolButton>
           <ToolButton active={tool.kind === 'erase'} onClick={() => setTool({ kind: 'erase' })} title="Remove buildings (E, or right-click any time)">Remove</ToolButton>
@@ -497,9 +615,23 @@ export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
             New map
           </button>
           <span className="sep" />
+          <span className="view-switch" title="Switch view (V)">
+            {VIEW_ORDER.map((v) => (
+              <button key={v} className={view === v ? 'active' : ''} onClick={() => setView(v)}>
+                {VIEW_LABELS[v]}
+              </button>
+            ))}
+          </span>
+          <span className="sep" />
+          {tool.kind === 'paste' && clip && (
+            <span className="hand">
+              Pasting <b>{clip.entities.length}</b> buildings (R rotate, Esc cancel)
+            </span>
+          )}
           {hand && (
             <span className="hand">
               Placing <b>{hand.displayName}</b>
+              {handRecipe && <> making <b>{handRecipe}</b></>}
               {isRotatable(hand) && <> facing {DIR_NAMES[direction]} (R)</>}
             </span>
           )}
@@ -509,40 +641,75 @@ export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
           <span>{cursor ? `x ${cursor[0]}, y ${cursor[1]}` : ' '}</span>
           <span>{layout.entities.length} buildings · {layout.water.length} water tiles</span>
           <span className="msg">{message}</span>
-          <span className="hint">Wheel zoom · Space/middle-drag pan · R rotate · Q pick · right-click remove</span>
+          <span className="hint">/ search · V view · drag to select · Ctrl+C/V copy · R rotate · Q pick · right-click remove · Space-drag pan</span>
         </div>
       </div>
 
-      {sel && selDef && (
-        <aside className="editor-inspector">
-          <h3>{selDef.displayName}</h3>
-          <dl>
-            <dt>Position</dt>
-            <dd>{sel.x}, {sel.y}</dd>
-            <dt>Size</dt>
-            <dd>{selDef.width}×{selDef.height}</dd>
-            {isRotatable(selDef) && (
-              <>
-                <dt>Facing</dt>
-                <dd>{DIR_NAMES[sel.direction]}</dd>
-              </>
-            )}
-          </dl>
-          <MachineSettings entity={sel} def={selDef} onChange={(patch) => apply(updateEntity(layout, sel.id, patch))} />
-          <div className="tool-row">
-            {isRotatable(selDef) && <button onClick={() => apply(rotateEntity(layout, sel.id))}>Rotate</button>}
-            <button
-              onClick={() => {
-                apply(removeEntities(layout, [sel.id]));
-                setSelected(null);
-              }}
-            >
-              Remove
-            </button>
-          </div>
-          <a href={selDef.wikiUrl} target="_blank" rel="noreferrer">Wiki page</a>
-        </aside>
-      )}
+      <aside className="editor-inspector">
+        {sel && selDef ? (
+          <>
+            <h3>{selDef.displayName}</h3>
+            <dl>
+              <dt>Position</dt>
+              <dd>{sel.x}, {sel.y}</dd>
+              <dt>Size</dt>
+              <dd>{selDef.width}×{selDef.height}</dd>
+              {isRotatable(selDef) && (
+                <>
+                  <dt>Facing</dt>
+                  <dd>{DIR_NAMES[sel.direction]}</dd>
+                </>
+              )}
+            </dl>
+            <MachineSettings entity={sel} def={selDef} onChange={(patch) => apply(updateEntity(layout, sel.id, patch))} />
+            <MachineRates rate={rates[sel.id]} status={power.status[sel.id]} />
+            <div className="tool-row">
+              {isRotatable(selDef) && <button onClick={() => apply(rotateEntity(layout, sel.id))}>Rotate</button>}
+              <button
+                onClick={() => {
+                  apply(removeEntities(layout, [sel.id]));
+                  setSelected(null);
+                }}
+              >
+                Remove
+              </button>
+            </div>
+            <a href={selDef.wikiUrl} target="_blank" rel="noreferrer">Wiki page</a>
+          </>
+        ) : selection.length > 1 ? (
+          <>
+            <h3>{selection.length} buildings selected</h3>
+            <p className="muted small">Ctrl+C copy · Ctrl+X cut · R rotate · Delete remove · Shift+click to add or drop one</p>
+            <div className="tool-row">
+              <button onClick={() => apply(rotateGroup(layout, selection))}>Rotate</button>
+              <button
+                onClick={() => {
+                  setClip(copyToClipboard(layout.entities.filter((e) => selection.includes(e.id))));
+                  setTool({ kind: 'paste' });
+                }}
+              >
+                Copy
+              </button>
+              <button
+                onClick={() => {
+                  apply(removeEntities(layout, selection));
+                  setSelection([]);
+                }}
+              >
+                Remove
+              </button>
+            </div>
+            <SelectionCounts ids={selection} entities={layout.entities} />
+          </>
+        ) : (
+          <>
+            <h3>Factory</h3>
+            <PowerSummary power={power} />
+            <ProductionSummary rates={rates} />
+            {layout.entities.length === 0 && <p className="muted">Pick a building on the left, or press / to search.</p>}
+          </>
+        )}
+      </aside>
     </div>
   );
 }
@@ -552,5 +719,20 @@ function ToolButton(props: { active: boolean; onClick: () => void; title: string
     <button className={`tool${props.active ? ' active' : ''}`} onClick={props.onClick} title={props.title}>
       {props.children}
     </button>
+  );
+}
+
+function SelectionCounts({ ids, entities }: { ids: string[]; entities: PlacedEntity[] }) {
+  const counts = new Map<string, number>();
+  const set = new Set(ids);
+  for (const e of entities) if (set.has(e.id)) counts.set(e.name, (counts.get(e.name) ?? 0) + 1);
+  return (
+    <ul className="flow-list">
+      {[...counts].sort((a, b) => b[1] - a[1]).map(([name, n]) => (
+        <li key={name}>
+          {n} × {ENTITIES[name]?.displayName ?? name}
+        </li>
+      ))}
+    </ul>
   );
 }
