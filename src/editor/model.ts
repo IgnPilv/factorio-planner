@@ -40,6 +40,35 @@ export interface Layout {
   water: string[];
   /** Rail track pieces (2.0 blueprint form). Signals and train stops are entities. */
   rails?: PlacedRail[];
+  /** City-block grid shown on the map: lines at k·pitch + offset, with a rail corridor of the given width centred on each. */
+  blockGrid?: BlockGrid;
+}
+
+export interface BlockGrid {
+  pitch: number;
+  offset: number;
+  corridor: number;
+}
+
+/** A block grid is usable when the pitch is even and leaves room between corridors. */
+export function validBlockGrid(g: unknown): g is BlockGrid {
+  const b = g as BlockGrid;
+  return !!b && Number.isInteger(b.pitch) && Number.isInteger(b.offset) && Number.isInteger(b.corridor) && b.pitch >= 16 && b.pitch <= 1000 && b.corridor >= 0 && b.corridor < b.pitch - 4;
+}
+
+/** Which block a tile is in: block (i, j) spans grid lines i..i+1 and j..j+1. */
+export function blockOf(g: BlockGrid, x: number, y: number): [number, number] {
+  return [Math.floor((x - g.offset) / g.pitch), Math.floor((y - g.offset) / g.pitch)];
+}
+
+/** Whether a tile lies in a rail corridor of the grid. */
+export function inCorridor(g: BlockGrid, x: number, y: number): boolean {
+  const h = g.corridor / 2;
+  const d = (v: number) => {
+    const m = (((v + 0.5 - g.offset) % g.pitch) + g.pitch) % g.pitch;
+    return Math.min(m, g.pitch - m);
+  };
+  return d(x) < h || d(y) < h;
 }
 
 export const emptyLayout = (): Layout => ({ version: 1, entities: [], water: [] });
@@ -275,6 +304,7 @@ export function parseLayout(json: string): Layout {
       .map((r) => ({ id: typeof r.id === 'string' ? r.id : newId(), name: r.name, x: r.x, y: r.y, direction: r.direction }));
     if (rails.length) out.rails = rails;
   }
+  if (validBlockGrid(raw.blockGrid)) out.blockGrid = { pitch: raw.blockGrid.pitch, offset: raw.blockGrid.offset, corridor: raw.blockGrid.corridor };
   return out;
 }
 

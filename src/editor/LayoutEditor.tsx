@@ -26,6 +26,9 @@ import {
   layoutOccupancy,
   railsInBox,
   clipboardRailsAt,
+  blockOf,
+  inCorridor,
+  validBlockGrid,
   type Direction,
   type Layout,
   type PlacedEntity,
@@ -163,6 +166,11 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL, incoming }
   useEffect(() => writePref('coverage', showCoverage), [showCoverage]);
   const [showRobots, setShowRobots] = useState(() => readPref('robots', true));
   useEffect(() => writePref('robots', showRobots), [showRobots]);
+  const [showBlocks, setShowBlocks] = useState(() => readPref('blocks', true));
+  useEffect(() => {
+    writePref('blocks', showBlocks);
+    rendererRef.current?.setShowBlocks(showBlocks);
+  }, [showBlocks]);
 
   // Undo/redo history of whole layouts (cheap: arrays are shared structurally).
   const past = useRef<Layout[]>([]);
@@ -208,6 +216,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL, incoming }
     rendererRef.current = r;
     r.init(host).then(() => {
       if (rendererRef.current !== r) return;
+      r.setShowBlocks(readPref('blocks', true));
       r.setLayout(st.current.layout);
       r.centerOn(-10, 0);
     });
@@ -238,6 +247,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL, incoming }
     if (!incoming || incoming.seq === lastIncoming.current) return;
     lastIncoming.current = incoming.seq;
     apply(incoming.layout);
+    if (incoming.layout.blockGrid) setShowBlocks(true);
     setSelection([]);
     const xs = incoming.layout.rails?.map((r) => r.x) ?? [0];
     const ys = incoming.layout.rails?.map((r) => r.y) ?? [0];
@@ -687,6 +697,8 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL, incoming }
         setShowCoverage((v) => !v);
       } else if (k === 'o' && !ev.ctrlKey && !ev.metaKey) {
         setShowRobots((v) => !v);
+      } else if (k === 'b' && !ev.ctrlKey && !ev.metaKey) {
+        setShowBlocks((v) => !v);
       } else if (k === 'w' && !ev.ctrlKey) setTool({ kind: 'water' });
       else if (k === 'e' && !ev.ctrlKey) setTool({ kind: 'erase' });
       else if (k === '[' || k === '-') setBrush((b) => Math.max(1, b - 1));
@@ -877,6 +889,34 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL, incoming }
           <label className="toggle" title="Show roboport logistics (50x50, orange) and construction (110x110, blue) zones and which roboports connect (O)">
             <input type="checkbox" checked={showRobots} onChange={(e) => setShowRobots(e.target.checked)} /> Roboports
           </label>
+          <label className="toggle" title="Show the city-block grid: rail corridors in blue (B). Buildings in a corridor are flagged in the track checks.">
+            <input
+              type="checkbox"
+              checked={showBlocks && !!layout.blockGrid}
+              onChange={(e) => {
+                setShowBlocks(e.target.checked);
+                if (e.target.checked && !layout.blockGrid) apply({ ...layout, blockGrid: { pitch: 100, offset: 0, corridor: 12 } });
+              }}
+            />{' '}
+            Blocks
+          </label>
+          {showBlocks && layout.blockGrid && (
+            <label className="toggle" title="Block size: the distance between corridor centres (even)">
+              <input
+                type="number"
+                className="pitch"
+                min={16}
+                max={1000}
+                step={2}
+                value={layout.blockGrid.pitch}
+                onChange={(e) => {
+                  const pitch = Math.round(Number(e.target.value) / 2) * 2;
+                  const next = { ...layout.blockGrid!, pitch };
+                  if (validBlockGrid(next)) apply({ ...layout, blockGrid: next });
+                }}
+              />
+            </label>
+          )}
           <span className="sep" />
           {tool.kind === 'paste' && clip && (
             <span className="hand">
@@ -898,13 +938,19 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL, incoming }
         </div>
         <div className="editor-canvas" ref={hostRef} />
         <div className="editor-status">
-          <span>{cursor ? `x ${cursor[0]}, y ${cursor[1]}` : ' '}</span>
+          <span>
+            {cursor ? `x ${cursor[0]}, y ${cursor[1]}` : ' '}
+            {cursor && layout.blockGrid && showBlocks && (() => {
+              const [bi, bj] = blockOf(layout.blockGrid, cursor[0], cursor[1]);
+              return ` · block ${bi}, ${bj}${inCorridor(layout.blockGrid, cursor[0], cursor[1]) ? ' (corridor)' : ''}`;
+            })()}
+          </span>
           <span>
             {layout.entities.length} buildings{layout.rails?.length ? ` · ${layout.rails.length} rails` : ''} · {layout.water.length} water tiles
             {robots.roboports.length > 0 && ` · ${robots.roboports.length} roboports in ${robots.networks.length} network${robots.networks.length === 1 ? '' : 's'}`}
           </span>
           <span className="msg">{message}</span>
-          <span className="hint">/ search · V view · O roboports · I contents · drag to select · Ctrl+C/V copy · R rotate · Q pick · right-click remove · Space-drag pan</span>
+          <span className="hint">/ search · V view · O roboports · B blocks · I contents · drag to select · Ctrl+C/V copy · R rotate · Q pick · right-click remove · Space-drag pan</span>
         </div>
       </div>
 

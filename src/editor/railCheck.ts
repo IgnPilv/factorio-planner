@@ -5,7 +5,7 @@
 import { checkRails, opposite, type Point } from '../rails/geometry';
 import { analyseSignals, type Signal } from '../rails/signals';
 import { ENTITIES } from './catalog';
-import type { Layout, PlacedEntity } from './model';
+import { entityRect, inCorridor, type Layout, type PlacedEntity } from './model';
 import { railPiece, signalAt, signalFacing, trainStopAt } from './rails';
 
 export interface RailCheckIssue {
@@ -43,13 +43,16 @@ export function signalOf(e: PlacedEntity): Signal {
   return { id: e.id, kind, x: cx - rx * 1.5 - fx * 0.5, y: cy - ry * 1.5 - fy * 0.5, dir: travel };
 }
 
+const CORRIDOR_OK = new Set(['pole', 'rail-signal', 'train-stop', 'roboport']);
+
 const DIAG: Record<number, [number, number]> = { 2: [1, -1], 6: [1, 1], 10: [-1, 1], 14: [-1, -1] };
 
 export function checkLayoutRails(layout: Layout): RailCheck | null {
   const rails = layout.rails ?? [];
   const signalEnts = layout.entities.filter((e) => ENTITIES[e.name]?.kind === 'rail-signal');
   const stops = layout.entities.filter((e) => ENTITIES[e.name]?.kind === 'train-stop');
-  if (!rails.length && !signalEnts.length && !stops.length) return null;
+  const grid = layout.blockGrid;
+  if (!rails.length && !signalEnts.length && !stops.length && !grid) return null;
 
   const pieces = rails.map((r) => railPiece(r));
   const net = checkRails(pieces);
@@ -74,6 +77,24 @@ export function checkLayoutRails(layout: Layout): RailCheck | null {
     if (!p || p.x !== s.x || p.y !== s.y || p.direction !== s.direction)
       issues.push({ severity: 'error', entityId: s.id, at: { x: s.x + 1, y: s.y + 1 }, message: 'Train stop is not beside straight track on its right' });
   }
+
+  // Rail corridors of the block grid stay free for track: only signals, stops,
+  // poles and roboports may stand there.
+  if (grid)
+    for (const e of layout.entities) {
+      const kind = ENTITIES[e.name]?.kind;
+      if (kind && CORRIDOR_OK.has(kind)) continue;
+      const r = entityRect(e);
+      let hit = false;
+      for (let y = r.y; y < r.y + r.h && !hit; y++) for (let x = r.x; x < r.x + r.w && !hit; x++) hit = inCorridor(grid, x, y);
+      if (hit)
+        issues.push({
+          severity: 'warning',
+          entityId: e.id,
+          at: { x: r.x + r.w / 2, y: r.y + r.h / 2 },
+          message: `${ENTITIES[e.name]?.displayName ?? e.name} stands in a rail corridor`,
+        });
+    }
 
   const report = analyseSignals(pieces, placed);
   for (const i of report.issues)
