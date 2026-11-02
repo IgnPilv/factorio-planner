@@ -9,7 +9,7 @@
 // whose outputs can't leave backs up; one whose inputs don't arrive starves.
 
 import { solve, type Coefficients, type Constraint } from 'yalps';
-import type { Entity, GameData } from '../data/types';
+import type { Entity, GameData, Technology } from '../data/types';
 import { sumFlows, type Flow } from './flow';
 import { beaconsByEntity, type PlacedEntity } from './layout';
 import { beltToChest, chestToBelt } from './inserter-belt';
@@ -74,19 +74,37 @@ export interface SteadyStateResult {
   ok: boolean;
   entities: Record<string, EntityState>;
   transport: Record<string, TransportState>;
-  /** Items leaving the layout: open belt ends, chests, labs. */
+  /** Items leaving the layout: open belt ends and chests. */
   outputs: Flow[];
   /** Items taken from supply chests. */
   inputs: Flow[];
   /** Per chest: items put in (stored) and items taken out of a supply chest. Absent on a failed solve. */
   chests?: Record<string, { stored: Flow[]; supplied: Flow[] }>;
   power: PowerState;
+  /** What the labs research, when the layout has labs fed with science packs. */
+  research?: ResearchProgress;
   warnings: string[];
 }
 
 export interface SteadyOptions {
   /** Fuel for burner machines and boilers. Default "coal". */
   fuel?: string;
+  /**
+   * Technology the labs research, which sets which packs they use and how fast.
+   * Default: the most advanced research the packs reaching the labs allow (see researchFor).
+   */
+  labResearch?: string;
+}
+
+export interface ResearchProgress {
+  /** Technology being researched. */
+  tech: string;
+  /** Research units completed per second, all labs together (lab productivity included). */
+  unitsPerSecond: number;
+  /** Science packs used per second. */
+  packs: Flow[];
+  /** Other technologies the packs reaching the labs could research. */
+  choices: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -315,7 +333,7 @@ export function simulateLayout(
 
   const edges: Edge[] = [];
   const supplies = new Map<NodeId, string>(); // chest node -> supplied item
-  const sinks = new Set<NodeId>(); // nodes that absorb anything (chests, labs)
+  const sinks = new Set<NodeId>(); // nodes that absorb anything (chests)
   const sinkAccept = new Map<NodeId, Set<string>>();
   const transport: Record<string, TransportState> = {};
   const capacities = new Map<string, number>();
@@ -325,6 +343,22 @@ export function simulateLayout(
   // --- Machines ----------------------------------------------------------
   for (const q of placed) {
     const kind = q.e.kind;
+    if (kind === 'lab') {
+      // A lab is a machine whose inputs (packs per second) are set once we know
+      // which packs reach it and so what it researches (see below).
+      const rate = machineRate(data, { entity: q.e.name, modules: q.p.modules, beacons: beacons.get(q.p.id) ?? [] }, bonuses);
+      machines.set(q.p.id, {
+        q,
+        rate,
+        itemIn: new Map(),
+        itemOut: new Map(),
+        fluidIn: new Map(),
+        fluidOut: new Map(),
+        electric: q.e.energySource === 'electric' && rate.powerW > 0,
+        weight: 1,
+      });
+      continue;
+    }
     if (!MACHINES.has(kind)) continue;
     const needsRecipe = CRAFTERS.has(kind) || kind === 'mining-drill';
     if (needsRecipe && !q.p.recipe) {
@@ -371,9 +405,12 @@ export function simulateLayout(
       sinks.add(node);
       if (q.p.recipe) supplies.set(node, q.p.recipe);
     } else if (q.e.kind === 'lab') {
+      // The lab's slots: inserters fill them and can take packs on to the next
+      // lab; the lab itself uses packs from them.
       const node = `l:${q.p.id}`;
-      sinks.add(node);
-      sinkAccept.set(node, new Set(q.e.inputs ?? []));
+      const packs = new Set(q.e.inputs ?? []);
+      sinkAccept.set(node, packs);
+      edges.push({ id: `lab:${q.p.id}`, from: node, to: machineNode(q.p.id), accept: packs });
     }
   }
 
@@ -382,9 +419,9 @@ export function simulateLayout(
     const q = at(x, y);
     if (!q) return undefined;
     const k = q.e.kind;
+    if (k === 'lab') return { node: `l:${q.p.id}`, q };
     if (machines.has(q.p.id)) return { node: machineNode(q.p.id), q };
     if (k === 'chest') return { node: `c:${q.p.id}`, q };
-    if (k === 'lab') return { node: `l:${q.p.id}`, q };
     if (k === 'belt' || k === 'underground-belt') return { node: `b:${q.p.id}`, q };
     if (k === 'splitter') return { node: `s:${q.p.id}`, q };
     return undefined;
@@ -592,6 +629,26 @@ export function simulateLayout(
         if (e.from.startsWith('m:') && !machines.get(e.from.slice(2))?.itemOut.has(item)) continue;
         if (addReach(e.to, item)) changed = true;
       }
+    }
+  }
+
+  // --- Labs: what they research -------------------------------------------
+  const labs = [...machines.values()].filter((m) => m.q.e.kind === 'lab');
+  const packsAtLabs = new Set<string>();
+  for (const m of labs) for (const item of reach.get(machineNode(m.q.p.id)) ?? []) packsAtLabs.add(item);
+  const labTech = labs.length && packsAtLabs.size ? pickResearch(data, packsAtLabs, options.labResearch) : undefined;
+  if (labTech?.cost) {
+    for (const m of labs) {
+      const cycles = ((m.q.e.researchingSpeed ?? 1) * (1 + m.rate.speedBonus)) / labTech.cost.time;
+      m.rate.craftsPerSecond = cycles;
+      m.rate.inputs = labTech.cost.ingredients.map((i) => ({ name: i.name, perSecond: i.amount * cycles }));
+      for (const f of m.rate.inputs) m.itemIn.set(f.name, f.perSecond);
+    }
+  } else {
+    // Nothing to research: labs stand idle.
+    for (const m of labs) {
+      machines.delete(m.q.p.id);
+      idle.set(m.q.p.id, 'idle');
     }
   }
 
@@ -829,16 +886,6 @@ export function simulateLayout(
     t.utilization = laneCap > 0 ? Math.max(total(left), total(right)) / laneCap : 0;
   }
 
-  // Lab consumption becomes their "inputs".
-  for (const q of placed) {
-    if (q.e.kind !== 'lab') continue;
-    const node = `l:${q.p.id}`;
-    const absorbed = [...(reach.get(node) ?? [])]
-      .map((item) => ({ name: item, perSecond: val(`absorb:${node}:${item}`) }))
-      .filter((f) => f.perSecond > 1e-9);
-    const rate = machineRate(data, { entity: q.e.name, modules: q.p.modules, beacons: beacons.get(q.p.id) ?? [] }, bonuses);
-    entities[q.p.id] = { activity: absorbed.length > 0 ? 1 : 0, status: absorbed.length > 0 ? 'working' : 'starved', rate: { ...rate, inputs: absorbed } };
-  }
 
   const outputs: Flow[] = [];
   const inputs: Flow[] = [];
@@ -865,6 +912,16 @@ export function simulateLayout(
     outputs: sumFlows(outputs, 1e-7),
     inputs: sumFlows(inputs, 1e-7),
     power,
+    ...(labTech
+      ? {
+          research: {
+            tech: labTech.name,
+            unitsPerSecond: labs.reduce((a, m) => a + (entities[m.q.p.id]?.rate.craftsPerSecond ?? 0) * (1 + m.rate.productivityBonus), 0),
+            packs: sumFlows(labs.flatMap((m) => entities[m.q.p.id]?.rate.inputs ?? []), 1e-9),
+            choices: researchChoices(data, packsAtLabs).map((t) => t.name),
+          },
+        }
+      : {}),
     warnings,
   };
 }
@@ -926,6 +983,30 @@ function balanceSplitters(
   if (!any) return undefined;
   const r = solve({ direction: 'minimize', objective: 'imbalance', constraints: cons, variables: vars });
   return r.status === 'optimal' ? new Map(r.variables) : undefined;
+}
+
+/**
+ * Technologies these packs can research: every ingredient among them. Most
+ * advanced first (more pack types, then infinite, then longer units).
+ */
+export function researchChoices(data: GameData, packs: Iterable<string>): Technology[] {
+  const have = new Set(packs);
+  return Object.values(data.technologies)
+    .filter((t) => t.cost && t.cost.ingredients.length > 0 && t.cost.ingredients.every((i) => have.has(i.name)))
+    .sort(
+      (a, b) =>
+        b.cost!.ingredients.length - a.cost!.ingredients.length ||
+        Number(b.maxLevel === 'infinite') - Number(a.maxLevel === 'infinite') ||
+        b.cost!.time - a.cost!.time ||
+        a.name.localeCompare(b.name),
+    );
+}
+
+/** The chosen technology if its packs all arrive, else the most advanced one they allow. */
+function pickResearch(data: GameData, packs: Set<string>, wanted?: string): Technology | undefined {
+  const want = wanted ? data.technologies[wanted] : undefined;
+  if (want?.cost) return want;
+  return researchChoices(data, packs)[0];
 }
 
 function blankTransport(kind: TransportState['kind'], capacity: number): TransportState {

@@ -72,6 +72,14 @@ splitter and chest, and nothing moves faster than its limit.
   moves 1200/s one way between two pipelines. A pipeline spreading outside
   320×320 tiles (`default_pipeline_extent`) carries nothing, as in game, until a
   pump splits it.
+- **Labs** research one technology: the chosen one (`labResearch`) or by
+  default the most advanced the packs reaching the labs allow (most pack types,
+  then infinite, then longest unit time; `researchChoices`). Each lab uses
+  `amount × researching speed × (1 + speed bonus) / unit time` of each pack per
+  second (speed bonus = modules, beacons and lab-speed research), and makes
+  `(1 + lab productivity)` units per cycle. Inserters can take packs from one
+  lab on to the next. Labs no longer count as layout outputs; the result's
+  `research` gives units/s and packs/s.
 - **Power**: no generators in the layout means power is assumed to come from
   outside. Otherwise poles join within wire reach and cover their supply area;
   uncovered machines get no power, and a short network slows its machines.
