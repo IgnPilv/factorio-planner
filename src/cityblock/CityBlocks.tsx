@@ -6,6 +6,7 @@ import { gameData } from '../data';
 import { centreLine, type RailPiece } from '../rails/geometry';
 import { signalPosition } from '../rails/signals';
 import { analyse, buildDesign, DEFAULT_SPEC, gridBuildings, type BlockSpec, type Status } from './block';
+import { blockBlueprint } from './export';
 import { constructionRect, logisticsRect, supplyRect, type Rect } from './network';
 import './cityblock.css';
 
@@ -77,6 +78,24 @@ export function CityBlocks() {
 
   const design = useMemo(() => buildDesign(spec), [spec]);
   const result = useMemo(() => analyse(design), [design]);
+  const blueprint = useMemo(() => {
+    try {
+      return { ok: true as const, ...blockBlueprint(design, `City block ${spec.pitch}x${spec.pitch}`) };
+    } catch (e) {
+      return { ok: false as const, error: String(e) };
+    }
+  }, [design, spec.pitch]);
+  const [copied, setCopied] = useState(false);
+  const copyBlueprint = async () => {
+    if (!blueprint.ok) return;
+    try {
+      await navigator.clipboard.writeText(blueprint.string);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   const set = <K extends keyof BlockSpec>(k: K, v: BlockSpec[K]) => setSpec((s) => ({ ...s, [k]: v }));
   const num = (k: 'pitch' | 'offset' | 'trackSpacing' | 'corridor' | 'locomotives' | 'wagons', min: number, max: number, step = 1) => (
@@ -206,6 +225,21 @@ export function CityBlocks() {
           Inner area {spec.pitch - spec.corridor}x{spec.pitch - spec.corridor}.
         </p>
 
+        <h3>Blueprint</h3>
+        {blueprint.ok ? (
+          <>
+            <button onClick={copyBlueprint}>{copied ? 'Copied' : 'Copy blueprint string'}</button>
+            <textarea className="cb-bp" readOnly value={blueprint.string} onFocus={(e) => e.target.select()} />
+            <p className="cb-note">
+              One {spec.pitch}x{spec.pitch} cell: {blueprint.entities.length} entities (dashed blue square on the map: the junction at its top-left corner,
+              the top and left tracks, and the block's buildings). It snaps to an absolute {spec.pitch}x{spec.pitch} grid;
+              paste it into every cell to build the network.
+            </p>
+          </>
+        ) : (
+          <p className="cb-note">Can't export: {blueprint.error}</p>
+        )}
+
         <h3>Train</h3>
         <div className="cb-pair">
           {num('locomotives', 1, 8)}
@@ -278,6 +312,9 @@ export function CityBlocks() {
             return <circle key={s.id} className={s.kind === 'chain' ? 'cb-signal-chain' : 'cb-signal'} cx={p.x} cy={p.y} r={0.6} />;
           })}
           {layers.wires && result.wires.map(([a, b], i) => <line key={`w${i}`} className="cb-wire" x1={a.x} y1={a.y} x2={b.x} y2={b.y} />)}
+          {blueprint.ok && (
+            <rect className="cb-cell" x={blueprint.origin.x} y={blueprint.origin.y} width={spec.pitch} height={spec.pitch} />
+          )}
           {design.nodes.map((n) => {
             const e = gameData.entities[n.name];
             const w = e?.width ?? 1;
