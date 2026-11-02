@@ -28,7 +28,7 @@ import {
 } from './model';
 import { MachineSettings } from './MachineSettings';
 import { BlueprintDialog, type BlueprintDialogMode } from './BlueprintDialog';
-import { computeLayoutRates, simulateLayout, type SteadyStateResult } from '../calc';
+import { computeLayoutRates, simulateLayout, type ResearchState, type SteadyStateResult } from '../calc';
 import { gameData } from '../data';
 import { FlowState, MachineRates, PowerSummary, ProductionSummary, QuickSearch, SimSummary } from './Panels';
 import { analysePower, poleInfo } from './power';
@@ -70,10 +70,10 @@ function resolvePlacement(layout: Layout, name: string, dir: Direction, cx: numb
 }
 
 /**
- * Until the research panel lands, treat every recipe as unlocked but give no
- * rate bonuses (techs that change rates stay off).
+ * Default research when none is passed in: every recipe unlocked, no rate
+ * bonuses (techs that change rates stay off).
  */
-const UNLOCK_ALL = Object.fromEntries(Object.values(gameData.technologies).filter((t) => !t.affectsRates).map((t) => [t.name, 1]));
+const UNLOCK_ALL: ResearchState = Object.fromEntries(Object.values(gameData.technologies).filter((t) => !t.affectsRates).map((t) => [t.name, 1]));
 
 function readPref(key: string, fallback: boolean): boolean {
   try {
@@ -97,9 +97,11 @@ const VIEW_ORDER: ViewMode[] = ['normal', 'electric', 'logistics'];
 export interface LayoutEditorProps {
   /** Called whenever the layout changes, so other panels can react. */
   onLayoutChange?: (layout: Layout) => void;
+  /** Researched techs (from the research panel); changes machine rates and inserter hands. */
+  research?: ResearchState;
 }
 
-export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
+export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<GridRenderer | null>(null);
 
@@ -189,21 +191,21 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
   useEffect(() => rendererRef.current?.setSelection(selection), [selection, layout]);
   // ---- rates, power and views ---------------------------------------------
 
-  const rates = useMemo(() => computeLayoutRates(layout, gameData, UNLOCK_ALL), [layout]);
+  const rates = useMemo(() => computeLayoutRates(layout, gameData, research), [layout, research]);
   const power = useMemo(() => analysePower(layout.entities, rates), [layout.entities, rates]);
   // The steady-state simulation is heavier (~0.2 s per 1,000 buildings), so run it after edits settle.
   const [sim, setSim] = useState<SteadyStateResult | null>(null);
   useEffect(() => {
     const t = setTimeout(() => {
       try {
-        setSim(simulateLayout(layout, gameData, UNLOCK_ALL));
+        setSim(simulateLayout(layout, gameData, research));
       } catch (err) {
         console.error('simulation failed', err);
         setSim(null);
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [layout]);
+  }, [layout, research]);
   useEffect(() => rendererRef.current?.setBadges(buildBadges(view, layout.entities, rates, sim)), [view, layout.entities, rates, sim]);
   // While a pole is in hand (or one is selected) show supply areas and the wires it would make.
   const polePreview = useMemo(() => {
