@@ -14,7 +14,8 @@
 
 import { gameData } from '../data';
 import { ENTITIES } from '../editor/catalog';
-import { boundsOf, footprint, type Clipboard, type Direction, type PlacedEntity } from '../editor/model';
+import { footprint, groupBounds, type Clipboard, type Direction, type PlacedEntity } from '../editor/model';
+import { isRailName, RAIL_ITEM, railValid, signalDirectionAt, type PlacedRail } from '../editor/rails';
 import { poleInfo } from '../editor/power';
 import {
   encodeVersion,
@@ -36,6 +37,8 @@ const RECIPE_PROTOTYPES = new Set(['assembling-machine']);
 
 export interface ExportOptions {
   label?: string;
+  /** Rail track to include (signals and train stops are among the entities). */
+  rails?: readonly PlacedRail[];
 }
 
 export interface ExportResult {
@@ -50,8 +53,10 @@ export function layoutToBlueprint(entities: readonly PlacedEntity[], opts: Expor
   const ugRole = undergroundRoles(known);
   const ptgDir = pipeToGroundDirections(known);
 
+  const rails = opts.rails ?? [];
   // Shift so the blueprint sits near the origin; the game re-centres anyway.
-  const b = known.length ? boundsOf(known) : { x: 0, y: 0, w: 0, h: 0 };
+  // With rails the shift is even, so rail ends stay on the rail grid.
+  const b = groupBounds(known, rails);
 
   const out: BlueprintEntityInput[] = known.map((e) => {
     const def = ENTITIES[e.name]!;
@@ -72,11 +77,17 @@ export function layoutToBlueprint(entities: readonly PlacedEntity[], opts: Expor
     return be;
   });
 
+  for (const r of rails) {
+    const be: BlueprintEntityInput = { name: r.name, position: { x: r.x - b.x, y: r.y - b.y } };
+    if (r.direction) be.direction = r.direction;
+    out.push(be);
+  }
+
   return {
     blueprint: makeBlueprint(out, {
       label: opts.label,
       wires: poleWires(known),
-      itemOf: (n) => ENTITIES[n]?.item ?? n,
+      itemOf: (n) => (isRailName(n) ? RAIL_ITEM : (ENTITIES[n]?.item ?? n)),
     }),
     skipped: entities.length - known.length,
   };
@@ -277,13 +288,26 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
   // 1.1 and older use 8-way directions; 2.0 (internally 1.2 while in development) uses 16-way.
   const legacy = (bp.version ?? 0) < encodeVersion(1, 2);
   const placed: Omit<PlacedEntity, 'id'>[] = [];
-  // The layout editor has no rails: when a blueprint's rails are skipped, its
-  // signals, stops and trains go too, rather than floating on empty ground.
-  const hasRails = (bp.entities ?? []).some((e) => RAIL_PIECE.test(e.name));
+  const rails: Omit<PlacedRail, 'id'>[] = [];
+  let lostTrack = false;
+  const lostRail = (name: string) => {
+    unknown[name] = (unknown[name] ?? 0) + 1;
+    lostTrack = true;
+  };
+  for (const be of bp.entities ?? []) {
+    const r = readRail(be, legacy);
+    if (r === undefined) continue;
+    if (r) rails.push(r);
+    else lostRail(legacy ? `${be.name} (1.x diagonal or curve)` : be.name);
+  }
+  // When some track can't be read, its signals, stops and trains are left out
+  // too, rather than floating beside missing track.
   for (const orig of bp.entities ?? []) {
+    if (RAIL_PIECE.test(orig.name)) continue;
     const be = legacy && LEGACY_NAMES[orig.name] ? { ...orig, name: LEGACY_NAMES[orig.name]! } : orig;
     const def = ENTITIES[be.name];
-    if (!def || (hasRails && RAIL_PARTS.has(def.kind))) {
+    // Trains are not placed: they stand on track and are not part of a layout.
+    if (!def || def.kind === 'rolling-stock' || (lostTrack && RAIL_PARTS.has(def.kind))) {
       unknown[be.name] = (unknown[be.name] ?? 0) + 1;
       continue;
     }
@@ -303,13 +327,34 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
     Object.assign(e, readLogistics(def.kind, def.name, be));
     placed.push(e);
   }
-  if (!placed.length) return { clipboard: null, unknown, label: bp.label };
-  const b = boundsOf(placed);
-  return {
-    clipboard: { w: b.w, h: b.h, entities: placed.map((e) => ({ ...e, x: e.x - b.x, y: e.y - b.y })) },
-    unknown,
-    label: bp.label,
-  };
+  if (!placed.length && !rails.length) return { clipboard: null, unknown, label: bp.label };
+  // Signals guard the track on their right: take their facing from the track beside them.
+  if (rails.length)
+    for (const e of placed) {
+      if (ENTITIES[e.name]?.kind !== 'rail-signal') continue;
+      const d = signalDirectionAt(rails as PlacedRail[], e.x, e.y, e.direction);
+      if (d !== null) e.direction = d as Direction;
+    }
+  const b = groupBounds(placed, rails);
+  const clipboard: Clipboard = { w: b.w, h: b.h, entities: placed.map((e) => ({ ...e, x: e.x - b.x, y: e.y - b.y })) };
+  if (rails.length) clipboard.rails = rails.map((r) => ({ ...r, x: r.x - b.x, y: r.y - b.y }));
+  return { clipboard, unknown, label: bp.label };
+}
+
+/**
+ * A rail piece from a blueprint entity: undefined when it is not track, null when
+ * it is track the editor can't hold. 1.x straight rails along an axis are the
+ * same piece in 2.0; 1.x diagonal and curved rails have no 2.0 equivalent (the
+ * game keeps them as legacy rails), so they are reported.
+ */
+function readRail(be: BlueprintEntity, legacy: boolean): Omit<PlacedRail, 'id'> | null | undefined {
+  if (!RAIL_PIECE.test(be.name)) return undefined;
+  const raw = be.direction ?? 0;
+  let r: Omit<PlacedRail, 'id'> | undefined;
+  if (legacy) {
+    if (be.name === 'straight-rail' && raw % 2 === 0) r = { name: 'straight-rail', x: be.position.x, y: be.position.y, direction: raw % 4 === 0 ? 0 : 4 };
+  } else if (isRailName(be.name)) r = { name: be.name, x: be.position.x, y: be.position.y, direction: raw };
+  return r && railValid(r) ? r : null;
 }
 
 const gameRecipeOk = (r: string) => !!gameData.recipes[r];

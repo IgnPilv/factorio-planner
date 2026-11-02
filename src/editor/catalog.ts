@@ -10,7 +10,7 @@ export const ENTITIES: Record<string, Entity> = gameData.entities;
 const ROTATABLE: ReadonlySet<EntityKind> = new Set<EntityKind>([
   'belt', 'underground-belt', 'splitter', 'inserter', 'mining-drill', 'offshore-pump', 'pump',
   'boiler', 'generator', 'assembler', 'chemical-plant', 'refinery', 'storage-tank', 'pipe-to-ground',
-  'steam-turbine', 'heat-exchanger',
+  'steam-turbine', 'heat-exchanger', 'rail-signal', 'train-stop',
 ]);
 export const isRotatable = (ent: Entity) => ROTATABLE.has(ent.kind) || ent.width !== ent.height;
 
@@ -23,6 +23,7 @@ const KIND_COLOR: Partial<Record<EntityKind, number>> = {
   accumulator: 0x5f6f5f, 'storage-tank': 0x777f88, 'rocket-silo': 0x55606a,
   'underground-belt': 0xb8912a, splitter: 0xd8b13a, 'pipe-to-ground': 0x5c6a79, pump: 0x5a7a9a,
   reactor: 0x4a7a4a, 'heat-exchanger': 0x9a6a5a, 'steam-turbine': 0x7a7a7a,
+  'rail-signal': 0x4f9a4f, 'train-stop': 0xa04a3a,
 };
 const NAME_COLOR: Record<string, number> = {
   'fast-transport-belt': 0xc8463b, 'express-transport-belt': 0x3b8bd0,
@@ -34,7 +35,7 @@ const NAME_COLOR: Record<string, number> = {
   'fast-underground-belt': 0xc8463b, 'express-underground-belt': 0x3b8bd0,
   'fast-splitter': 0xc8463b, 'express-splitter': 0x3b8bd0, 'bulk-inserter': 0x4a9a4a,
   'active-provider-chest': 0x9a4a8a, 'passive-provider-chest': 0xb04a4a, 'storage-chest': 0xb09a3a,
-  'buffer-chest': 0x4a9a4a, 'requester-chest': 0x3a6ab0,
+  'buffer-chest': 0x4a9a4a, 'requester-chest': 0x3a6ab0, 'rail-chain-signal': 0x3a7fc0,
 };
 export const entityColor = (ent: Entity) => NAME_COLOR[ent.name] ?? KIND_COLOR[ent.kind] ?? 0x888888;
 
@@ -52,6 +53,7 @@ const GROUPS: { title: string; kinds: EntityKind[] }[] = [
   { title: 'Water and fluids', kinds: ['offshore-pump', 'pipe', 'pipe-to-ground', 'pump'] },
   { title: 'Power', kinds: ['pole', 'boiler', 'generator', 'solar-panel', 'accumulator', 'reactor', 'heat-exchanger', 'steam-turbine'] },
   { title: 'Robots', kinds: ['roboport'] },
+  { title: 'Trains', kinds: ['rail-signal', 'train-stop'] },
   { title: 'Mining and smelting', kinds: ['mining-drill', 'furnace'] },
   { title: 'Production', kinds: ['assembler', 'refinery', 'chemical-plant', 'centrifuge', 'lab', 'beacon', 'rocket-silo'] },
 ];
@@ -67,7 +69,8 @@ export const HOTBAR_GROUPS: { title: string; names: string[] }[] = (() => {
     names.forEach((n) => used.add(n));
     return { title: g.title, names };
   });
-  const rest = all.filter((e) => !used.has(e.name)).map((e) => e.name);
+  // Locomotives and wagons stand on track rather than being built, so they are not in the palette.
+  const rest = all.filter((e) => !used.has(e.name) && e.kind !== 'rolling-stock').map((e) => e.name);
   if (rest.length) groups.push({ title: 'Other', names: rest });
   return groups.filter((g) => g.names.length);
 })();

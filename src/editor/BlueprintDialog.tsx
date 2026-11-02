@@ -5,9 +5,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { decodeBlueprintString, encodeBlueprintString } from '../blueprint/format';
 import { blueprintToClipboard, layoutToBlueprint } from '../blueprint/layout';
 import { ENTITIES } from './catalog';
-import type { Clipboard, PlacedEntity } from './model';
+import type { Clipboard, PlacedEntity, PlacedRail } from './model';
 
-export type BlueprintDialogMode = { kind: 'export'; entities: PlacedEntity[]; scope: 'selection' | 'layout' } | { kind: 'import'; initial?: string };
+export type BlueprintDialogMode =
+  | { kind: 'export'; entities: PlacedEntity[]; rails?: PlacedRail[]; scope: 'selection' | 'layout' }
+  | { kind: 'import'; initial?: string };
 
 export function BlueprintDialog({ mode, onClose, onImport }: { mode: BlueprintDialogMode; onClose: () => void; onImport: (clip: Clipboard, note: string) => void }) {
   useEffect(() => {
@@ -19,20 +21,20 @@ export function BlueprintDialog({ mode, onClose, onImport }: { mode: BlueprintDi
   return (
     <div className="bp-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="bp-dialog" role="dialog" aria-modal="true">
-        {mode.kind === 'export' ? <ExportPane entities={mode.entities} scope={mode.scope} onClose={onClose} /> : <ImportPane initial={mode.initial} onClose={onClose} onImport={onImport} />}
+        {mode.kind === 'export' ? <ExportPane entities={mode.entities} rails={mode.rails ?? []} scope={mode.scope} onClose={onClose} /> : <ImportPane initial={mode.initial} onClose={onClose} onImport={onImport} />}
       </div>
     </div>
   );
 }
 
-function ExportPane({ entities, scope, onClose }: { entities: PlacedEntity[]; scope: 'selection' | 'layout'; onClose: () => void }) {
+function ExportPane({ entities, rails, scope, onClose }: { entities: PlacedEntity[]; rails: PlacedRail[]; scope: 'selection' | 'layout'; onClose: () => void }) {
   const [label, setLabel] = useState('');
   const [copied, setCopied] = useState<'' | 'ok' | 'failed'>('');
   const text = useRef<HTMLTextAreaElement>(null);
   const { str, wires, skipped } = useMemo(() => {
-    const { blueprint, skipped } = layoutToBlueprint(entities, { label: label.trim() || undefined });
+    const { blueprint, skipped } = layoutToBlueprint(entities, { label: label.trim() || undefined, rails });
     return { str: encodeBlueprintString(blueprint), wires: blueprint.wires?.length ?? 0, skipped };
-  }, [entities, label]);
+  }, [entities, rails, label]);
   useEffect(() => setCopied(''), [str]);
 
   const drillsWithoutNote = entities.filter((e) => ENTITIES[e.name]?.kind === 'mining-drill').length;
@@ -51,7 +53,8 @@ function ExportPane({ entities, scope, onClose }: { entities: PlacedEntity[]; sc
     <>
       <h3>Blueprint string</h3>
       <p className="muted small">
-        {entities.length} building{entities.length === 1 ? '' : 's'} from the {scope === 'selection' ? 'selection' : 'whole layout'}
+        {entities.length} building{entities.length === 1 ? '' : 's'}
+        {rails.length > 0 && <>, {rails.length} rail piece{rails.length === 1 ? '' : 's'}</>} from the {scope === 'selection' ? 'selection' : 'whole layout'}
         {wires > 0 && <>, {wires} copper wire{wires === 1 ? '' : 's'}</>}. In Factorio, click <b>Import string</b> on the shortcut bar and paste it.
       </p>
       <label className="bp-label">
@@ -81,13 +84,18 @@ function ImportPane({ initial, onClose, onImport }: { initial?: string; onClose:
     try {
       const { clipboard, unknown, label } = blueprintToClipboard(decodeBlueprintString(value));
       const missing = Object.entries(unknown).map(([n, c]) => `${c} × ${n}`);
-      const rails = Object.keys(unknown).some((n) => /rail|locomotive|wagon|train-stop/.test(n));
-      const railNote = rails ? ' Rails and trains are not in the layout editor yet; the City blocks tab builds rail grids.' : '';
+      const names = Object.keys(unknown);
+      const notes: string[] = [];
+      if (names.some((n) => /locomotive|wagon/.test(n))) notes.push('Trains are not placed: the planner lays out track, not rolling stock.');
+      if (names.some((n) => /\(1\.x|legacy-/.test(n))) notes.push('1.x diagonal and curved rails have no 2.0 equivalent (the game keeps them as legacy rails), so that track and its signals and stops were left out.');
+      if (names.some((n) => /rail-ramp|rail-support|elevated/.test(n))) notes.push('Elevated rails are not supported.');
+      const railNote = notes.length ? ' ' + notes.join(' ') : '';
       if (!clipboard) {
         setError(missing.length ? `Nothing the planner knows in this blueprint (${missing.join(', ')}).${railNote}` : 'This blueprint has no buildings.');
         return;
       }
-      const note = `${label ? `"${label}": ` : ''}${clipboard.entities.length} buildings${missing.length ? `, skipped ${missing.join(', ')}` : ''}${railNote}`;
+      const railCount = clipboard.rails?.length ?? 0;
+      const note = `${label ? `"${label}": ` : ''}${clipboard.entities.length} buildings${railCount ? `, ${railCount} rails` : ''}${missing.length ? `, skipped ${missing.join(', ')}` : ''}${railNote}`;
       // Say what is missing before placing a partial blueprint.
       if (missing.length) setPending({ clip: clipboard, note, skipped: missing, railNote });
       else onImport(clipboard, note);
@@ -114,7 +122,7 @@ function ImportPane({ initial, onClose, onImport }: { initial?: string; onClose:
       {pending && (
         <div className="small warn">
           <p>
-            Only part of this blueprint can be placed: {pending.clip.entities.length} building{pending.clip.entities.length === 1 ? '' : 's'}. Skipped (not in the planner{pending.railNote ? ', or need rails' : ', possibly from a mod'}): {pending.skipped.join(', ')}.
+            Only part of this blueprint can be placed: {pending.clip.entities.length} building{pending.clip.entities.length === 1 ? '' : 's'}. Skipped (not in the planner{pending.railNote ? '' : ', possibly from a mod'}): {pending.skipped.join(', ')}.
             {pending.railNote}
           </p>
         </div>

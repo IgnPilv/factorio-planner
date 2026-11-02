@@ -1,7 +1,7 @@
 // Saved designs: named groups of buildings kept in the browser, which can be
 // placed back into the layout and exported together as one blueprint book.
 
-import type { Clipboard, PlacedEntity } from '../editor/model';
+import type { Clipboard, PlacedEntity, PlacedRail } from '../editor/model';
 import { copyToClipboard } from '../editor/model';
 import { decodeAllBlueprints, encodeBlueprintString, encodeBookString, makeBook, type Blueprint } from './format';
 import { blueprintToClipboard, layoutToBlueprint } from './layout';
@@ -42,15 +42,16 @@ export function saveDesigns(designs: Design[], storage: Pick<Storage, 'setItem'>
   }
 }
 
-export function designFromEntities(entities: readonly PlacedEntity[], name: string): Design | null {
-  const clip = copyToClipboard(entities);
+export function designFromEntities(entities: readonly PlacedEntity[], name: string, rails: readonly PlacedRail[] = []): Design | null {
+  const clip = copyToClipboard(entities, rails);
   return clip ? { id: designId(), name, clip, created: Date.now() } : null;
 }
 
 const asPlaced = (clip: Clipboard): PlacedEntity[] => clip.entities.map((e, i) => ({ ...e, id: `c${i}` }));
 
 export function designBlueprint(d: Design): Blueprint {
-  return layoutToBlueprint(asPlaced(d.clip), { label: d.name }).blueprint;
+  const rails = (d.clip.rails ?? []).map((r, i) => ({ ...r, id: `r${i}` }));
+  return layoutToBlueprint(asPlaced(d.clip), { label: d.name, rails }).blueprint;
 }
 
 export function designString(d: Design): string {
