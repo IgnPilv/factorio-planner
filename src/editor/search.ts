@@ -4,6 +4,7 @@
 import { gameData } from '../data';
 import type { Entity } from '../data/types';
 import { ENTITIES } from './catalog';
+import { ALL_UNLOCKED, entityUnlocked, recipeUnlocked, type Unlocks } from './unlocks';
 
 export interface SearchHit {
   kind: 'building' | 'recipe' | 'resource';
@@ -14,6 +15,8 @@ export interface SearchHit {
   label: string;
   /** Secondary text, e.g. which machine makes the recipe. */
   detail?: string;
+  /** Not researched yet (greenfield mode). */
+  locked?: boolean;
 }
 
 /** Preferred machine when a recipe can be made in several. Greenfield-friendly tiers first. */
@@ -65,7 +68,7 @@ function buildIndex(): SearchHit[] {
  * Results that start with the query, then words that start with it, rank first;
  * buildings come before recipes of the same name.
  */
-export function quickSearch(query: string, limit = 12): SearchHit[] {
+export function quickSearch(query: string, limit = 12, unlocks: Unlocks = ALL_UNLOCKED): SearchHit[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   index ??= buildIndex();
@@ -75,9 +78,19 @@ export function quickSearch(query: string, limit = 12): SearchHit[] {
     const label = hit.label.toLowerCase();
     if (!words.every((w) => label.includes(w))) continue;
     let score = label === q ? 0 : label.startsWith(q) ? 1 : label.split(/[\s-]+/).some((w) => w.startsWith(words[0])) ? 2 : 3;
-    score = score * 3 + (hit.kind === 'building' ? 0 : hit.kind === 'resource' ? 1 : 2);
-    scored.push({ hit, score });
+    const h = unlocks.all ? hit : withUnlocks(hit, unlocks);
+    score = score * 3 + (hit.kind === 'building' ? 0 : hit.kind === 'resource' ? 1 : 2) + (h.locked ? 100 : 0);
+    scored.push({ hit: h, score });
   }
   scored.sort((a, b) => a.score - b.score || a.hit.label.length - b.hit.label.length || a.hit.label.localeCompare(b.hit.label));
   return scored.slice(0, limit).map((s) => s.hit);
+}
+
+/** Re-pick the machine for a hit from what is researched, or mark it locked. */
+function withUnlocks(hit: SearchHit, u: Unlocks): SearchHit {
+  if (hit.kind === 'building') return entityUnlocked(u, hit.building) ? hit : { ...hit, locked: true };
+  if (hit.kind === 'recipe' && !recipeUnlocked(u, hit.recipe!)) return { ...hit, locked: true };
+  const machines = hit.kind === 'recipe' ? machinesForRecipe(hit.recipe!) : drillsForResource(hit.recipe!);
+  const m = machines.find((e) => entityUnlocked(u, e.name));
+  return m ? { ...hit, building: m.name, detail: m.displayName } : { ...hit, locked: true };
 }
