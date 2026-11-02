@@ -760,7 +760,17 @@ export function simulateLayout(
   }
   for (const [row, cap] of capacities) if (usedRows.has(row)) constraints[row] = { max: cap };
 
-  const solution = solve({ direction: 'maximize', objective: 'obj', constraints, variables });
+  let solution = solve({ direction: 'maximize', objective: 'obj', constraints, variables });
+  // Short of power: the game gives every machine on the network the same
+  // share (satisfaction), so they all slow down alike, rather than the LP
+  // feeding some fully and starving others.
+  if (solution.status === 'optimal' && powerNets.modelled) {
+    const caps = evenPowerShares(solution.variables, machines, powerNets.nets, constraints, variables);
+    if (caps.size) {
+      for (const [id, cap] of caps) constraints[`u:${id}`] = { max: Math.min(1, cap) };
+      solution = solve({ direction: 'maximize', objective: 'obj', constraints, variables });
+    }
+  }
   const power: PowerState = { demandW: 0, supplyW: 0, capacityW: 0, modelled: powerNets.modelled };
   if (solution.status !== 'optimal') {
     return { ok: false, entities: {}, transport, outputs: [], inputs: [], power, warnings: [...warnings, `Solver: ${solution.status}`] };
@@ -1007,6 +1017,59 @@ function pickResearch(data: GameData, packs: Set<string>, wanted?: string): Tech
   const want = wanted ? data.technologies[wanted] : undefined;
   if (want?.cost) return want;
   return researchChoices(data, packs)[0];
+}
+
+/**
+ * Power satisfaction per short network, as activity caps for its electric
+ * consumers. A network is short when the machines on it would use more than
+ * the generation the first solve could get. Its share s is found by bisection
+ * so that, with every consumer capped at s and power not limiting, demand
+ * equals that generation.
+ */
+function evenPowerShares(
+  first: [string, number][],
+  machines: Map<string, MachineInfo>,
+  nets: string[],
+  constraints: Record<string, Constraint>,
+  variables: Record<string, Coefficients>,
+): Map<string, number> {
+  const at = (vals: Map<string, number>, id: string) => vals.get(`u:${id}`) ?? 0;
+  const consumersOf = (net: string) => [...machines.values()].filter((m) => m.electric && m.powerNet === net && m.rate.powerW > 0);
+  const demand = (vals: Map<string, number>, net: string) => consumersOf(net).reduce((a, m) => a + m.rate.powerW * at(vals, m.q.p.id), 0);
+  const firstVals = new Map(first);
+  const supply = new Map<string, number>();
+  for (const net of nets) {
+    let s = 0;
+    for (const m of machines.values()) if (m.powerNet === net && m.rate.powerW < 0) s += -m.rate.powerW * at(firstVals, m.q.p.id);
+    supply.set(net, s);
+  }
+  // What the machines would do with unlimited power.
+  const free: Record<string, Constraint> = {};
+  for (const [row, c] of Object.entries(constraints)) if (!row.startsWith('pow:')) free[row] = c;
+  const solveCapped = (caps: Map<string, number>) => {
+    const cons = { ...free };
+    for (const [net, cap] of caps) for (const m of consumersOf(net)) cons[`u:${m.q.p.id}`] = { max: Math.min(1, cap) };
+    const r = solve({ direction: 'maximize', objective: 'obj', constraints: cons, variables });
+    return r.status === 'optimal' ? new Map(r.variables) : undefined;
+  };
+  const unlimited = solveCapped(new Map());
+  if (!unlimited) return new Map();
+  const short = nets.filter((net) => demand(unlimited, net) > (supply.get(net) ?? 0) * (1 + 1e-6) + 1e-3);
+  if (!short.length) return new Map();
+  const lo = new Map(short.map((n) => [n, 0]));
+  const hi = new Map(short.map((n) => [n, 1]));
+  for (let i = 0; i < 20; i++) {
+    const mid = new Map(short.map((n) => [n, (lo.get(n)! + hi.get(n)!) / 2]));
+    const vals = solveCapped(mid);
+    if (!vals) break;
+    for (const n of short) {
+      if (demand(vals, n) > supply.get(n)!) hi.set(n, mid.get(n)!);
+      else lo.set(n, mid.get(n)!);
+    }
+  }
+  const caps = new Map<string, number>();
+  for (const n of short) for (const m of consumersOf(n)) caps.set(m.q.p.id, lo.get(n)!);
+  return caps;
 }
 
 function blankTransport(kind: TransportState['kind'], capacity: number): TransportState {

@@ -82,7 +82,10 @@ splitter and chest, and nothing moves faster than its limit.
   `research` gives units/s and packs/s.
 - **Power**: no generators in the layout means power is assumed to come from
   outside. Otherwise poles join within wire reach and cover their supply area;
-  uncovered machines get no power, and a short network slows its machines.
+  uncovered machines get no power. A short network slows all its machines
+  alike, as the game's power satisfaction does: every electric consumer on it
+  is capped at the same share s, found by bisection so that demand with that cap
+  equals the generation available.
   Power-plant parts only run as hard as demand needs.
 - **Chests** absorb whatever reaches them; a chest whose `recipe` names an
   item is an unlimited supply of it. Labs absorb science packs.
