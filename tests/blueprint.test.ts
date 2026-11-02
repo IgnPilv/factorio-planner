@@ -434,12 +434,18 @@ describe('blueprints with rails', () => {
     }
     // A lamp where the 2.0 track will run (the 2.0 S-bend is longer, so it doesn't follow the old curves exactly).
     entities.push({ name: 'small-lamp', position: { x: 0.5, y: 2.5 } });
-    const { clipboard, railRoutes, unknown } = blueprintToClipboard({ item: 'blueprint', version: encodeVersion(1, 1, 110), entities: entities.map((e, i) => ({ ...e, entity_number: i + 1 })) });
+    const { clipboard, railRoutes, unknown, preview } = blueprintToClipboard({ item: 'blueprint', version: encodeVersion(1, 1, 110), entities: entities.map((e, i) => ({ ...e, entity_number: i + 1 })) });
     expect(railRoutes!.moved).toBeGreaterThan(0);
     // Every signal guards track, facing the way it was set: none is left floating beside the old curve.
     for (const e of clipboard!.entities.filter((x) => x.name.startsWith('rail')))
       expect(signalAt(clipboard!.rails as PlacedRail[], e.x, e.y, e.direction)).toEqual({ direction: e.direction, diagonal: !!e.diagonal });
     expect(unknown).toEqual({ 'rail-chain-signal (beside 1.x curve, track rebuilt)': 1 });
+    // The preview map marks the rebuilt track, the moved lamp, the new junction signals and the dropped signal.
+    expect(preview!.rebuiltRails.length).toBeGreaterThan(0);
+    for (const i of preview!.rebuiltRails) expect(clipboard!.rails![i]!.name).not.toBe(undefined);
+    expect(preview!.movedEntities.map((i) => clipboard!.entities[i]!.name)).toEqual(['small-lamp']);
+    expect(preview!.addedSignals.every((i) => clipboard!.entities[i]!.name.startsWith('rail'))).toBe(true);
+    expect(preview!.dropped).toHaveLength(1);
     // Everything in the clipboard can be pasted: nothing sits on the track or on another building.
     const res = pasteClipboard({ ...emptyLayout(), water: [] }, clipboard!, 0, 0);
     expect(res.blocked).toBe(0);

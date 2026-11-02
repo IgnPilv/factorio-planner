@@ -326,7 +326,16 @@ export interface ImportResult {
   replaced: Record<string, number>;
   /** 1.x curve sections rebuilt with 2.0 track. */
   railRoutes?: { rebuilt: number; failed: number; legacyPieces: number; signals?: number; moved?: number; resignalled?: number };
+  /** What the import changed, as indexes into the clipboard's rails and entities and clipboard tiles, for the preview map. */
+  preview?: { rebuiltRails: number[]; movedEntities: number[]; addedSignals: number[]; dropped: { x: number; y: number }[] };
   label?: string;
+}
+
+interface Marks {
+  rebuilt: Set<object>;
+  moved: Set<object>;
+  added: Set<object>;
+  dropped: { x: number; y: number }[];
 }
 
 /** Turn a blueprint into an editor clipboard, ready to paste. */
@@ -363,6 +372,7 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
   let railRoutes: ImportResult['railRoutes'];
   let junctionSignals: LegacyConversion['ends'] = [];
   const strays: { name: string; x: number; y: number; facing: number }[] = [];
+  const marks: Marks = { rebuilt: new Set(), moved: new Set(), added: new Set(), dropped: [] };
   if (legacyTrack.length) {
     // 1.x curves and diagonals: plan the same routes again with 2.0 track.
     const conv = convertLegacyRails(legacyStraights, legacyTrack);
@@ -372,7 +382,11 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
       rails.length = 0;
       rails.push(...keep);
     }
-    for (const a of conv.added) if (railValid(a)) rails.push(a);
+    for (const a of conv.added)
+      if (railValid(a)) {
+        rails.push(a);
+        marks.rebuilt.add(a);
+      }
     junctionSignals = conv.ends;
     for (let i = 0; i < conv.lostPieces; i++) lostRail('1.x curve or diagonal (could not rebuild)');
   }
@@ -428,10 +442,10 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
     placed.push(e);
   }
   if (railRoutes) {
-    const moved = clearTrack(placed, track, unknown);
+    const moved = clearTrack(placed, track, unknown, marks);
     if (moved) railRoutes.moved = moved;
-    if (junctionSignals.length) railRoutes.signals = addJunctionSignals(placed, rails, track, junctionSignals);
-    const replacedSignals = replaceStraySignals(placed, rails, track, strays, unknown, railRoutes.rebuilt > 0);
+    if (junctionSignals.length) railRoutes.signals = addJunctionSignals(placed, rails, track, junctionSignals, marks);
+    const replacedSignals = replaceStraySignals(placed, rails, track, strays, unknown, railRoutes.rebuilt > 0, marks);
     if (replacedSignals) railRoutes.resignalled = replacedSignals;
   }
   if (!placed.length && !rails.length) return { clipboard: null, unknown, replaced, railRoutes, label: bp.label };
@@ -449,7 +463,17 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
   const b = groupBounds(placed, rails);
   const clipboard: Clipboard = { w: b.w, h: b.h, entities: placed.map((e) => ({ ...e, x: e.x - b.x, y: e.y - b.y })) };
   if (rails.length) clipboard.rails = rails.map((r) => ({ ...r, x: r.x - b.x, y: r.y - b.y }));
-  return { clipboard, unknown, replaced, railRoutes, label: bp.label };
+  let preview: ImportResult['preview'];
+  if (railRoutes) {
+    const idx = <T,>(list: readonly T[], set: Set<object>) => list.flatMap((x, i) => (set.has(x as object) ? [i] : []));
+    preview = {
+      rebuiltRails: idx(rails, marks.rebuilt),
+      movedEntities: idx(placed, marks.moved),
+      addedSignals: idx(placed, marks.added),
+      dropped: marks.dropped.map((d) => ({ x: d.x - b.x, y: d.y - b.y })),
+    };
+  }
+  return { clipboard, unknown, replaced, railRoutes, preview, label: bp.label };
 }
 
 /**
@@ -503,7 +527,7 @@ function occupancy(placed: readonly Omit<PlacedEntity, 'id'>[]) {
  * spot (up to 8 tiles away, which keeps roboport and pole coverage close to the
  * original), or leave it out when there is none. Returns how many moved.
  */
-function clearTrack(placed: Omit<PlacedEntity, 'id'>[], track: ReadonlySet<string>, unknown: Record<string, number>): number {
+function clearTrack(placed: Omit<PlacedEntity, 'id'>[], track: ReadonlySet<string>, unknown: Record<string, number>, marks: Marks): number {
   const blocking = placed.filter((e) => !RAIL_PARTS.has(ENTITIES[e.name]?.kind ?? '') && entityTiles(e).some((t) => track.has(t)));
   if (!blocking.length) return 0;
   const { taken } = occupancy(placed.filter((e) => !blocking.includes(e)));
@@ -517,9 +541,11 @@ function clearTrack(placed: Omit<PlacedEntity, 'id'>[], track: ReadonlySet<strin
       e.x += spot[0];
       e.y += spot[1];
       for (const t of entityTiles(e)) taken.add(t);
+      marks.moved.add(e);
       moved++;
     } else {
       placed.splice(placed.indexOf(e), 1);
+      marks.dropped.push({ x: e.x, y: e.y });
       const why = `${e.name} (in the way of rebuilt track)`;
       unknown[why] = (unknown[why] ?? 0) + 1;
     }
@@ -539,6 +565,7 @@ function replaceStraySignals(
   strays: readonly { name: string; x: number; y: number; facing: number }[],
   unknown: Record<string, number>,
   rebuilt: boolean,
+  marks: Marks,
 ): number {
   const { taken, signals } = occupancy(placed);
   const near: [number, number][] = [];
@@ -554,6 +581,7 @@ function replaceStraySignals(
         return !!at && at.direction * 4 + (at.diagonal ? 2 : 0) === s.facing;
       });
     if (!spot) {
+      marks.dropped.push({ x: s.x, y: s.y });
       const why = rebuilt ? `${s.name} (beside 1.x curve, track rebuilt)` : s.name;
       unknown[why] = (unknown[why] ?? 0) + 1;
       continue;
@@ -562,6 +590,7 @@ function replaceStraySignals(
     if (s.facing % 4 === 2) e.diagonal = true;
     placed.push(e);
     signals.push(e);
+    marks.added.add(e);
     taken.add(`${spot.x},${spot.y}`);
     added++;
   }
@@ -576,7 +605,7 @@ function replaceStraySignals(
  * track stays one-way and unsignalled track stays unsignalled. Skipped where a
  * building or another signal is already close. Returns how many were added.
  */
-function addJunctionSignals(placed: Omit<PlacedEntity, 'id'>[], rails: readonly Omit<PlacedRail, 'id'>[], track: ReadonlySet<string>, routes: LegacyConversion['ends']): number {
+function addJunctionSignals(placed: Omit<PlacedEntity, 'id'>[], rails: readonly Omit<PlacedRail, 'id'>[], track: ReadonlySet<string>, routes: LegacyConversion['ends'], marks: Marks): number {
   const { taken, signals: all } = occupancy(placed);
   const existing = all.filter((e) => !e.diagonal);
   const facingOf = (travel: number) => ((travel + 8) % 16) / 4;
@@ -621,6 +650,7 @@ function addJunctionSignals(placed: Omit<PlacedEntity, 'id'>[], rails: readonly 
     const e = { name: w.chain ? 'rail-chain-signal' : 'rail-signal', x, y, direction: facingOf(w.at.dir) as Direction };
     placed.push(e);
     placedSignals.push(e);
+    marks.added.add(e);
     taken.add(`${x},${y}`);
     added++;
   }

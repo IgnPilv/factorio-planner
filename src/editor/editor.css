@@ -108,7 +108,11 @@ ul.bottlenecks button.link { padding: 0; font-size: inherit; text-align: left; }
   gap: 8px;
 }
 .bp-dialog h3 { margin: 0; }
-.bp-summary { max-height: 50vh; overflow: auto; }
+.bp-summary { max-height: 60vh; overflow: auto; }
+.bp-preview { margin: 0 0 6px; }
+.bp-preview canvas { width: 100%; height: 220px; display: block; border-radius: 4px; }
+.bp-preview figcaption { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; color: var(--muted, #aaa); }
+.bp-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
 .bp-summary h4 { margin: 8px 0 2px; font-size: 13px; }
 .bp-summary ul { margin: 0; padding-left: 18px; columns: 2; column-gap: 16px; }
 .bp-summary li { break-inside: avoid; }
