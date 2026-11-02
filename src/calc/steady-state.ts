@@ -245,11 +245,13 @@ function drillDropTile(q: Placed): [number, number] {
 }
 
 const CRAFTERS = new Set(['assembler', 'furnace', 'chemical-plant', 'refinery', 'centrifuge', 'rocket-silo']);
-const MACHINES = new Set([...CRAFTERS, 'mining-drill', 'offshore-pump', 'boiler', 'generator', 'steam-turbine', 'solar-panel']);
+const MACHINES = new Set([...CRAFTERS, 'mining-drill', 'offshore-pump', 'boiler', 'heat-exchanger', 'reactor', 'generator', 'steam-turbine', 'solar-panel']);
 const BELTS = new Set(['belt', 'underground-belt', 'splitter']);
 // Pumps are not connectors: they join two networks one way, at a limited rate.
-const FLUID_CONNECTORS = new Set(['pipe', 'pipe-to-ground', 'storage-tank', 'offshore-pump', 'boiler', 'generator', 'steam-turbine']);
-const POWER_PLANT = new Set(['offshore-pump', 'boiler', 'generator', 'steam-turbine']);
+const FLUID_CONNECTORS = new Set(['pipe', 'pipe-to-ground', 'storage-tank', 'offshore-pump', 'boiler', 'heat-exchanger', 'generator', 'steam-turbine']);
+const POWER_PLANT = new Set(['offshore-pump', 'boiler', 'heat-exchanger', 'generator', 'steam-turbine']);
+/** Base game reactor neighbour_bonus: +100% heat per adjacent working reactor. */
+const REACTOR_NEIGHBOUR_BONUS = 1;
 
 // ---------------------------------------------------------------------------
 // Flow network
@@ -305,6 +307,8 @@ interface MachineInfo {
   fluidOut: Map<string, number>;
   powerNet?: string;
   electric: boolean;
+  /** Heat in MW at full speed: taken from its heat network (+) or given to it (−). */
+  heatMW: number;
   /** Electric consumers: drain in W, drawn even when the machine stands still. */
   drainW: number;
   weight: number;
@@ -324,7 +328,7 @@ export function simulateLayout(
   const warnings: string[] = [];
   const bonuses = researchBonuses(data, research);
   const fuelName = options.fuel ?? 'coal';
-  const fuelValue = data.items[fuelName]?.fuelValue;
+  const nuclearFuel = Object.values(data.items).find((i) => i.fuelCategory === 'nuclear' && !i.hidden)?.name;
 
   // --- Place everything --------------------------------------------------
   const placed: Placed[] = [];
@@ -372,6 +376,7 @@ export function simulateLayout(
         fluidOut: new Map(),
         electric: q.e.energySource === 'electric' && rate.powerW > 0,
         drainW: q.e.energySource === 'electric' && rate.powerW > 0 ? Math.min(q.e.drain ?? 0, rate.powerW) : 0,
+        heatMW: 0,
         weight: 1,
       });
       continue;
@@ -396,6 +401,7 @@ export function simulateLayout(
       fluidOut: new Map(),
       electric: q.e.energySource === 'electric' && rate.powerW > 0,
       drainW: q.e.energySource === 'electric' && rate.powerW > 0 ? Math.min(q.e.drain ?? 0, rate.powerW) : 0,
+      heatMW: (rate.heatW ?? 0) / 1e6,
       weight: POWER_PLANT.has(kind) ? -1e-3 : kind === 'solar-panel' ? 1e-6 : 1,
     };
     const isFluid = (n: string) => data.items[n]?.type === 'fluid' || n === 'water' || n === 'steam';
@@ -405,10 +411,16 @@ export function simulateLayout(
       (isFluid(f.name) ? info.fluidOut : info.itemOut).set(f.name, f.perSecond);
     }
     if (rate.fuelW > 0) {
-      if (fuelValue) {
-        info.fuel = { name: fuelName, perSecond: rate.fuelW / fuelValue };
-        info.itemIn.set(fuelName, (info.itemIn.get(fuelName) ?? 0) + info.fuel.perSecond);
-      } else warnings.push(`${fuelName} has no fuel value`);
+      // Reactors burn nuclear fuel; other burners the chosen chemical fuel.
+      const fuel = kind === 'reactor' ? nuclearFuel : fuelName;
+      const value = data.items[fuel ?? '']?.fuelValue;
+      if (fuel && value) {
+        info.fuel = { name: fuel, perSecond: rate.fuelW / value };
+        info.itemIn.set(fuel, (info.itemIn.get(fuel) ?? 0) + info.fuel.perSecond);
+        // Spent fuel (depleted cells) has to be taken out, or the machine stops.
+        const burnt = data.items[fuel]?.burntResult;
+        if (burnt) info.itemOut.set(burnt, (info.itemOut.get(burnt) ?? 0) + info.fuel.perSecond);
+      } else warnings.push(`${fuel ?? 'Nuclear fuel'} has no fuel value`);
     }
     machines.set(q.p.id, info);
   }
@@ -625,6 +637,9 @@ export function simulateLayout(
   // --- Fluids ------------------------------------------------------------
   const fluidNet = buildFluidNetworks(placed, at, machines, warnings);
 
+  // --- Heat --------------------------------------------------------------
+  const heat = buildHeatNetworks(placed, at, machines);
+
   // --- Power -------------------------------------------------------------
   const powerNets = buildPowerNetworks(placed, machines);
   // Electric inserters run off the same networks; one no pole reaches never moves.
@@ -808,6 +823,12 @@ export function simulateLayout(
         usedRows.add(balance(`f:${net}`, fluid));
       }
     }
+    // Heat: reactors give it to their heat network, heat exchangers take it.
+    if (m.heatMW !== 0) {
+      const net = heat.netOf.get(id);
+      if (net) coef(v, `heat:${net}`, -m.heatMW);
+      else if (m.heatMW > 0) constraints[`u:${id}`] = { max: 0 };
+    }
     // Electricity.
     if (powerNets.modelled) {
       if (m.electric) {
@@ -833,7 +854,7 @@ export function simulateLayout(
   }
   for (const row of usedRows) {
     if (row.startsWith('bal:')) constraints[row] = { equal: 0 };
-    else if (row.startsWith('pow:')) constraints[row] = { min: 0 };
+    else if (row.startsWith('pow:') || row.startsWith('heat:')) constraints[row] = { min: 0 };
   }
   for (const [row, cap] of capacities) if (usedRows.has(row)) constraints[row] = { max: cap };
 
@@ -1207,6 +1228,7 @@ function scaleRate(r: EntityRate, u: number): EntityRate {
     craftsPerSecond: r.craftsPerSecond * u,
     powerW: r.powerW > 0 ? r.powerW * u : r.powerW * u,
     fuelW: r.fuelW * u,
+    heatW: r.heatW !== undefined ? r.heatW * u : undefined,
     inputs: r.inputs.map((f) => ({ name: f.name, perSecond: f.perSecond * u })),
     outputs: r.outputs.map((f) => ({ name: f.name, perSecond: f.perSecond * u })),
   };
@@ -1369,6 +1391,84 @@ function buildFluidNetworks(
 // Electric networks: poles connect when within wire reach; a building is on a
 // network if any of its tiles is inside a pole's supply area. A layout with no
 // generators is assumed to be fed from outside.
+
+// ---------------------------------------------------------------------------
+// Heat networks: reactors, heat pipes and heat exchangers join where their heat
+// connection points meet (factorio-data heat_buffer / energy_source
+// connections). Pipe temperature drop and transfer limits are not modelled:
+// a network passes on all the heat its reactors make.
+
+const HEAT_KINDS = new Set(['reactor', 'heat-pipe', 'heat-exchanger']);
+
+/** Heat connection points of an entity facing north, relative to its centre, with the way each faces. */
+function heatPoints(kind: string): [number, number, Dir][] {
+  switch (kind) {
+    case 'heat-pipe':
+      return [[0, 0, 0], [0, 0, 1], [0, 0, 2], [0, 0, 3]];
+    case 'heat-exchanger':
+      return [[0, 0.5, 2]];
+    case 'reactor': {
+      const out: [number, number, Dir][] = [];
+      for (const t of [-2, 0, 2]) out.push([t, -2, 0], [2, t, 1], [t, 2, 2], [-2, t, 3]);
+      return out;
+    }
+    default:
+      return [];
+  }
+}
+
+/** Rotate a north-facing offset to direction d (clockwise quarter turns). */
+function rotateOffset(x: number, y: number, d: Dir): [number, number] {
+  switch (d) {
+    case 0: return [x, y];
+    case 1: return [-y, x];
+    case 2: return [-x, -y];
+    case 3: return [y, -x];
+  }
+}
+
+function buildHeatNetworks(placed: Placed[], at: (x: number, y: number) => Placed | undefined, machines: Map<string, MachineInfo>) {
+  const nodes = placed.filter((q) => HEAT_KINDS.has(q.e.kind));
+  const parent = new Map<string, string>();
+  const find = (a: string): string => {
+    let r = a;
+    while (parent.get(r) !== r) r = parent.get(r)!;
+    return r;
+  };
+  for (const q of nodes) parent.set(q.p.id, q.p.id);
+  /** World tile and facing of each connection point. */
+  const points = (q: Placed) =>
+    heatPoints(q.e.kind).map(([px, py, pd]) => {
+      const [rx, ry] = rotateOffset(px, py, q.d);
+      return { x: Math.floor(q.x + q.w / 2 + rx), y: Math.floor(q.y + q.h / 2 + ry), d: ((pd + q.d) % 4) as Dir };
+    });
+  for (const q of nodes) {
+    for (const c of points(q)) {
+      const nx = c.x + DX[c.d];
+      const ny = c.y + DY[c.d];
+      const n = at(nx, ny);
+      if (!n || n.p.id === q.p.id || !HEAT_KINDS.has(n.e.kind)) continue;
+      const back = opposite(c.d);
+      if (points(n).some((o) => o.x === nx && o.y === ny && o.d === back)) parent.set(find(q.p.id), find(n.p.id));
+    }
+  }
+  const netOf = new Map<string, string>();
+  for (const q of nodes) netOf.set(q.p.id, find(q.p.id));
+
+  // Neighbour bonus: reactors whose side midpoints meet (centres exactly one
+  // reactor width apart in a line) each add the bonus to the other's heat.
+  const reactors = nodes.filter((q) => q.e.kind === 'reactor');
+  for (const r of reactors) {
+    const m = machines.get(r.p.id);
+    if (!m) continue;
+    const n = reactors.filter(
+      (o) => o !== r && ((o.y === r.y && Math.abs(o.x - r.x) === r.w) || (o.x === r.x && Math.abs(o.y - r.y) === r.h)),
+    ).length;
+    m.heatMW *= 1 + REACTOR_NEIGHBOUR_BONUS * n;
+    m.rate.heatW = m.heatMW * 1e6;
+  }
+  return { netOf };
+}
 
 /** Whether a pole's supply area touches this entity. */
 function inSupplyArea(pole: Placed, q: Placed): boolean {

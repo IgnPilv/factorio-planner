@@ -30,6 +30,8 @@ export interface Item {
   /** Fuel value in joules. */
   fuelValue?: number;
   fuelCategory?: string;
+  /** Item left behind once this fuel is burnt (uranium fuel cell → depleted cell). */
+  burntResult?: string;
   /** Item group and subgroup, for browsing. */
   subgroup?: string;
   order?: string;
