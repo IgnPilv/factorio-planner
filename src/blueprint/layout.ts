@@ -17,6 +17,7 @@ import { ENTITIES } from '../editor/catalog';
 import { boundsOf, footprint, type Clipboard, type Direction, type PlacedEntity } from '../editor/model';
 import { poleInfo } from '../editor/power';
 import {
+  encodeVersion,
   makeBlueprint,
   MODULE_INVENTORY,
   POLE_COPPER,
@@ -193,7 +194,8 @@ export interface ImportResult {
 /** Turn a blueprint into an editor clipboard, ready to paste. */
 export function blueprintToClipboard(bp: Blueprint): ImportResult {
   const unknown: Record<string, number> = {};
-  const legacy = (bp.version ?? 0) < 2 ** 49; // before 2.0 directions were 8-way
+  // 1.1 and older use 8-way directions; 2.0 (internally 1.2 while in development) uses 16-way.
+  const legacy = (bp.version ?? 0) < encodeVersion(1, 2);
   const placed: Omit<PlacedEntity, 'id'>[] = [];
   for (const be of bp.entities ?? []) {
     const def = ENTITIES[be.name];

@@ -92,10 +92,11 @@ export function decodeVersion(v: number): [number, number, number, number] {
 }
 
 /**
- * Version written into exported blueprints. 2.0.0 so any 2.x game accepts the
- * string (a game refuses blueprints from a newer version than itself).
+ * Version written into exported blueprints: 2.0.10.1, the stamp on the 2.0
+ * blueprints in the game's own files. An early 2.0 version, so any 2.x game
+ * accepts the string (games refuse blueprints from newer versions).
  */
-export const BLUEPRINT_VERSION = encodeVersion(2, 0, 0, 0);
+export const BLUEPRINT_VERSION = encodeVersion(2, 0, 10, 1);
 
 function toBase64(bytes: Uint8Array): string {
   let s = '';

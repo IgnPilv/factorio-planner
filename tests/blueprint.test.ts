@@ -49,7 +49,7 @@ describe('blueprint string format', () => {
   it('packs versions like the game', () => {
     expect(encodeVersion(2, 0, 47, 0)).toBe(562949956501504);
     expect(encodeVersion(2, 0, 28, 1)).toBe(562949955256321);
-    expect(decodeVersion(BLUEPRINT_VERSION)).toEqual([2, 0, 0, 0]);
+    expect(BLUEPRINT_VERSION).toBe(562949954076673);
   });
 
   it('accepts raw JSON and books, rejects junk', () => {
@@ -211,5 +211,27 @@ describe('blueprint import', () => {
     expect(res.blocked).toBe(0);
     expect(res.placed).toHaveLength(7);
     expect(clipboardAt(clipboard!, 0, 0)).toHaveLength(7);
+  });
+});
+
+describe('against blueprints made by the game', () => {
+  it('import then export reproduces positions, directions and belt types', async () => {
+    const { GAME_BLUEPRINTS } = await import('./fixtures/game-blueprints');
+    const { ENTITIES } = await import('../src/editor/catalog');
+    let checked = 0;
+    for (const s of GAME_BLUEPRINTS) {
+      const bp = decodeBlueprintString(s);
+      bp.entities = (bp.entities ?? []).filter((e) => ENTITIES[e.name]);
+      const { clipboard } = blueprintToClipboard(bp);
+      const out = layoutToBlueprint(clipboard!.entities.map((e, i) => ({ ...e, id: `g${i}` }))).blueprint.entities!;
+      const dx = bp.entities[0]!.position.x - out[0]!.position.x;
+      const dy = bp.entities[0]!.position.y - out[0]!.position.y;
+      bp.entities.forEach((o, i) => {
+        const r = out[i]!;
+        expect([r.name, r.position.x + dx, r.position.y + dy, r.direction ?? 0, r.type]).toEqual([o.name, o.position.x, o.position.y, o.direction ?? 0, o.type]);
+        checked++;
+      });
+    }
+    expect(checked).toBeGreaterThan(50);
   });
 });
