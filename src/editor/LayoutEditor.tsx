@@ -29,7 +29,7 @@ import {
 import { MachineSettings } from './MachineSettings';
 import { computeLayoutRates, simulateLayout, type ResearchState, type SteadyStateResult } from '../calc';
 import { gameData } from '../data';
-import { FlowState, MachineRates, PowerSummary, ProductionSummary, QuickSearch, SimSummary } from './Panels';
+import { Bottlenecks, FlowState, MachineRates, SelectionFlows, PowerSummary, ProductionSummary, QuickSearch, SimSummary } from './Panels';
 import { analysePower, poleInfo } from './power';
 import { analyseRobots, isRoboportName, nodeOf, robotOverlay } from './robots';
 import type { SearchHit } from './search';
@@ -776,12 +776,14 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
               </button>
             </div>
             <SelectionCounts ids={selection} entities={layout.entities} />
+            <SelectionFlows sim={sim} ids={selection} />
           </>
         ) : (
           <>
             <h3>Factory</h3>
             <PowerSummary power={power} />
             <SimSummary sim={sim} />
+            <Bottlenecks sim={sim} entities={layout.entities} onSelect={setSelection} />
             <ProductionSummary rates={rates} />
             {layout.entities.length === 0 && <p className="muted">Pick a building on the left, or press / to search.</p>}
           </>
