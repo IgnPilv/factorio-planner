@@ -151,6 +151,43 @@ export function decodeBlueprintString(str: string): Blueprint {
   return bp;
 }
 
+/** Every blueprint in a string (a lone blueprint, or all of a book's, nested books included), in book order. */
+export function decodeAllBlueprints(str: string): Blueprint[] {
+  const out: Blueprint[] = [];
+  const walk = (obj: Record<string, unknown>) => {
+    if (obj.blueprint) out.push(obj.blueprint as Blueprint);
+    const book = obj.blueprint_book as { blueprints?: ({ index: number } & Record<string, unknown>)[] } | undefined;
+    for (const entry of [...(book?.blueprints ?? [])].sort((a, b) => a.index - b.index)) walk(entry);
+  };
+  walk(decodeJsonString(str));
+  return out;
+}
+
+export interface BlueprintBook {
+  item: 'blueprint-book';
+  label?: string;
+  icons?: BlueprintIcon[];
+  blueprints: { index: number; blueprint: Blueprint }[];
+  active_index: number;
+  version: number;
+}
+
+/** A blueprint book holding the given blueprints in order. */
+export function makeBook(blueprints: Blueprint[], label?: string): BlueprintBook {
+  const book: BlueprintBook = {
+    item: 'blueprint-book',
+    blueprints: blueprints.map((blueprint, index) => ({ index, blueprint })),
+    active_index: 0,
+    version: BLUEPRINT_VERSION,
+  };
+  if (label) book.label = label;
+  return book;
+}
+
+export function encodeBookString(book: BlueprintBook): string {
+  return encodeJsonString({ blueprint_book: book });
+}
+
 function findBlueprint(obj: Record<string, unknown>): Blueprint | undefined {
   if (obj.blueprint) return obj.blueprint as Blueprint;
   const book = obj.blueprint_book as { blueprints?: ({ index: number } & Record<string, unknown>)[]; active_index?: number } | undefined;
