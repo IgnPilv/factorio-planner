@@ -69,3 +69,11 @@ splitter and chest, and nothing moves faster than its limit.
 
 - `groupFlows(sim, ids?)`: net items/s of a set of buildings at the speed they actually run (outputs +, inputs −), their power draw, and how many run below full speed. The editor shows it for a multi-building selection.
 - `bottlenecks(sim, entities)`: what holds the layout back, worst first. Machines are grouped by building, recipe and reason (nothing delivers an input, short of power, starved, output blocked), ranked by machine-equivalents of speed lost. Belts and inserters running at ≥99% are listed when they carry an input of a starved machine, since those are the likely cause. This is a heuristic: it matches by item, not by tracing the exact path.
+
+## Filters and priorities
+
+- **Inserter filters**: an allow list narrows what the inserter moves (intersected with what the target accepts); a deny list (`filterMode: 'blacklist'`) blocks the listed items.
+- **Splitter output priority**: the priority side is filled first (an objective bonus of 1e-3 per item/s, below the 1e-2 for items leaving the layout); the other side only gets the overflow.
+- **Splitter filter** (needs an output priority, as in 2.0): the filter item goes only to the priority side and every other item only to the other side. If that side is blocked, the item waits; it does not overflow.
+- **Splitter input priority**: the priority input is emptied first.
+- Sides without a priority are still balanced evenly (third solve). That solve keeps machine activity, outputs and priorities, but not the 1e-6 per-edge flow cost, so an even split along a longer path is allowed.
