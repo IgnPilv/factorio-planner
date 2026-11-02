@@ -107,7 +107,7 @@ describe('machineRate', () => {
     expect(r.productivityBonus).toBeCloseTo(3);
   });
 
-  it('models water and steam: 1 pump : 20 boilers : 40 engines', () => {
+  it('models water and steam: 1 pump : 200 boilers : 400 engines', () => {
     const pump = machineRate(data, { entity: 'offshore-pump' });
     const boiler = machineRate(data, { entity: 'boiler' });
     const engine = machineRate(data, { entity: 'steam-engine' });
@@ -116,7 +116,7 @@ describe('machineRate', () => {
     expect(boiler.fuelW).toBeCloseTo(1.8e6);
     expect(flow(engine.inputs, 'steam')).toBe(30);
     expect(engine.powerW).toBe(-900e3);
-    expect(flow(pump.outputs, 'water') / flow(boiler.inputs, 'water')).toBeCloseTo(20);
+    expect(flow(pump.outputs, 'water') / flow(boiler.inputs, 'water')).toBeCloseTo(200);
     expect(flow(boiler.outputs, 'steam') / flow(engine.inputs, 'steam')).toBeCloseTo(2);
   });
 
@@ -184,14 +184,14 @@ describe('solveFactory', () => {
     expect(flow(r.imports, 'iron-plate')).toBeCloseTo(3 / 1.08);
   });
 
-  it('builds a steam power plant with 1 : 20 : 40 ratios and coal mining', () => {
+  it('builds a steam power plant with 1 : 200 : 400 ratios and coal mining', () => {
     const r = solveFactory(data, { targets: [{ name: ELECTRICITY, perSecond: 36e6 }], research: all });
     const engines = count(r, 'generator:steam-engine');
     const boilers = count(r, 'boiler:boiler');
     const pumps = count(r, 'pump:water');
     expect(engines).toBeGreaterThan(40); // coal drills need power too
     expect(boilers * 2).toBeCloseTo(engines);
-    expect(pumps * 20).toBeCloseTo(boilers);
+    expect(pumps * 200).toBeCloseTo(boilers);
     expect(flow(r.resources, 'coal')).toBeCloseTo(boilers * 0.45);
   });
 
