@@ -43,7 +43,8 @@ import { computeUnlocks, entityUnlocked, recipeUnlocked } from './unlocks';
 import type { SearchHit } from './search';
 import { buildBadges, buildViewOverlay, type ViewMode } from './views';
 import { GridRenderer } from './renderer';
-import { planRail, railFromPiece, railStartAt, signalDirectionAt, trainStopAt } from './rails';
+import { checkLayoutRails, type RailCheck } from './railCheck';
+import { planRail, railFromPiece, railStartAt, signalAt, trainStopAt } from './rails';
 import { newId as railId } from './model';
 import type { RailEnd } from '../rails/geometry';
 import { wikiIconUrl } from '../data';
@@ -72,15 +73,15 @@ function loadSaved(): Layout {
 }
 
 /** Where a click at tile cx,cy would put a building (offshore pumps snap to the shore, signals and stops to track). */
-function resolvePlacement(layout: Layout, name: string, dir: Direction, cx: number, cy: number) {
+function resolvePlacement(layout: Layout, name: string, dir: Direction, cx: number, cy: number): { x: number; y: number; direction: Direction; diagonal?: boolean } {
   const kind = ENTITIES[name]?.kind;
   if (kind === 'offshore-pump') {
     const snapped = autoOrientOffshore(layoutOccupancy(layout), new Set(layout.water), cx, cy, dir);
     if (snapped) return snapped;
   }
   if (kind === 'rail-signal' && layout.rails?.length) {
-    const d = signalDirectionAt(layout.rails, cx, cy, dir);
-    if (d !== null) return { x: cx, y: cy, direction: d as Direction };
+    const found = signalAt(layout.rails, cx, cy, dir);
+    if (found) return { x: cx, y: cy, direction: found.direction as Direction, diagonal: found.diagonal || undefined };
   }
   if (kind === 'train-stop' && layout.rails?.length) {
     const p = trainStopAt(layout.rails, cx, cy, dir);
@@ -259,8 +260,17 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
     }
     return null;
   }, [tool, cursor, direction, layout, selected]);
+  const railCheck = useMemo(() => checkLayoutRails(layout), [layout]);
   useEffect(() => {
     const overlay = buildViewOverlay(view, layout.entities, power, { polePreview, showPoleAreas, showWires, sim });
+    if (railCheck) {
+      // Track problems: orange dots at dead ends, red or yellow at signal and stop problems.
+      const dots = [
+        ...railCheck.deadEnds.map((p) => ({ x: p.x, y: p.y, color: 0xff9f1a, r: 5 })),
+        ...railCheck.issues.map((i) => ({ x: i.at.x, y: i.at.y, color: i.severity === 'error' ? 0xff4d4d : 0xffd34d, r: 6 })),
+      ];
+      overlay.dots = [...(overlay.dots ?? []), ...dots];
+    }
     if (showRobots || robotPreview) {
       const r = robotOverlay(robots, robotPreview);
       overlay.areas = [...(r.areas ?? []), ...(overlay.areas ?? [])];
@@ -268,7 +278,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
       overlay.dots = [...(overlay.dots ?? []), ...(r.dots ?? [])];
     }
     rendererRef.current?.setView(overlay);
-  }, [view, layout.entities, power, polePreview, showPoleAreas, showWires, sim, robots, robotPreview, showRobots]);
+  }, [view, layout.entities, power, polePreview, showPoleAreas, showWires, sim, robots, robotPreview, showRobots, railCheck]);
   useEffect(() => {
     setMessage('');
     setRailFrom(null);
@@ -285,9 +295,9 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
     if (!cursor) return r.setGhost({ items: [] });
     const [cx, cy] = cursor;
     if (tool.kind === 'build') {
-      const { x, y, direction: d } = resolvePlacement(layout, tool.name, direction, cx, cy);
+      const { x, y, direction: d, diagonal } = resolvePlacement(layout, tool.name, direction, cx, cy);
       const check = canPlace(occupancy, waterSet, tool.name, x, y, d);
-      r.setGhost({ items: [{ name: tool.name, x, y, direction: d, ok: check.ok }] });
+      r.setGhost({ items: [{ name: tool.name, x, y, direction: d, diagonal, ok: check.ok }] });
       setMessage(check.ok ? '' : check.reason);
     } else if (tool.kind === 'water' || tool.kind === 'land') {
       r.setGhost({ items: [], brush: { tiles: brushTiles(cx, cy, brush), color: tool.kind === 'water' ? 0x4fa3ff : 0x7fbf5f } });
@@ -326,7 +336,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
   }, []);
 
   const tryPlace = useCallback(
-    (name: string, x: number, y: number, dir: Direction, commit: boolean): string | null => {
+    (name: string, x: number, y: number, dir: Direction, commit: boolean, diagonal?: boolean): string | null => {
       const cur = st.current.layout;
       const occ = layoutOccupancy(cur);
       const check = canPlace(occ, new Set(cur.water), name, x, y, dir);
@@ -337,6 +347,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
       const id = newId();
       const t = st.current.tool;
       const e: PlacedEntity = { id, name, x, y, direction: dir };
+      if (diagonal) e.diagonal = true;
       if (t.kind === 'build' && t.name === name) {
         if (t.recipe) e.recipe = t.recipe;
         if (t.modules?.length) e.modules = [...t.modules];
@@ -441,7 +452,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
         past.current.push(st.current.layout);
         future.current = [];
         const p = resolvePlacement(st.current.layout, tl.name, dir, t[0], t[1]);
-        const id = tryPlace(tl.name, p.x, p.y, p.direction, false);
+        const id = tryPlace(tl.name, p.x, p.y, p.direction, false, p.diagonal);
         if (id) setMessage('');
         drag = { mode: 'build', name: tl.name, lastTile: t, lastId: id, dir, moved: false };
       } else if (tl.kind === 'water' || tl.kind === 'land') {
@@ -525,7 +536,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
       } else {
         // Bigger buildings: place wherever the ghost fits as the cursor moves.
         const p = resolvePlacement(st.current.layout, drag.name, drag.dir, t[0], t[1]);
-        tryPlace(drag.name, p.x, p.y, p.direction, false);
+        tryPlace(drag.name, p.x, p.y, p.direction, false, p.diagonal);
         drag.lastTile = t;
       }
       drag.moved = true;
@@ -923,6 +934,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
             <PowerSummary power={power} />
             <SimSummary sim={sim} />
             <Bottlenecks sim={sim} entities={layout.entities} onSelect={setSelection} />
+            {railCheck && <RailSummary check={railCheck} onSelect={(id) => setSelection([id])} />}
             <ProductionSummary rates={rates} />
             {layout.entities.length === 0 && <p className="muted">Pick a building on the left, or press / to search.</p>}
           </>
@@ -968,5 +980,37 @@ function SelectionCounts({ ids, entities, rails = [] }: { ids: string[]; entitie
         </li>
       ))}
     </ul>
+  );
+}
+
+function RailSummary({ check, onSelect }: { check: RailCheck; onSelect: (id: string) => void }) {
+  const shown = check.issues.slice(0, 8);
+  return (
+    <section className="rail-summary">
+      <h4>Track</h4>
+      <p className="small">
+        {check.pieces} rail piece{check.pieces === 1 ? '' : 's'} · {check.signals} signal{check.signals === 1 ? '' : 's'} · {check.blocks} block{check.blocks === 1 ? '' : 's'}
+        {check.deadEnds.length > 0 && <> · <span className="warn">{check.deadEnds.length} dead end{check.deadEnds.length === 1 ? '' : 's'}</span> (orange dots)</>}
+      </p>
+      {shown.length > 0 && (
+        <ul className="flow-list small">
+          {shown.map((i, n) => (
+            <li key={n} className={i.severity === 'error' ? 'warn' : undefined}>
+              {i.entityId ? (
+                <button className="linklike" onClick={() => onSelect(i.entityId!)}>
+                  {i.message}
+                </button>
+              ) : (
+                <>
+                  {i.message} at {i.at.x}, {i.at.y}
+                </>
+              )}
+            </li>
+          ))}
+          {check.issues.length > shown.length && <li className="muted">and {check.issues.length - shown.length} more</li>}
+        </ul>
+      )}
+      {check.issues.length === 0 && check.pieces > 0 && <p className="small muted">Signals and stops sit correctly. Rule used: chain signal into a junction, rail signal out.</p>}
+    </section>
   );
 }

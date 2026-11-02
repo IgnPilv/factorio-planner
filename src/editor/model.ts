@@ -27,6 +27,8 @@ export interface PlacedEntity {
   /** Splitters: preferred input and output side, seen facing the way items travel. */
   inputPriority?: 'left' | 'right';
   outputPriority?: 'left' | 'right';
+  /** Rail signals on 45° track: the 16-way facing is direction * 4 + 2. */
+  diagonal?: boolean;
   /** Requester and buffer chests: logistic requests. */
   requests?: { name: string; count: number }[];
 }
