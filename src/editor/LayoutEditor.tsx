@@ -33,6 +33,7 @@ import { gameData } from '../data';
 import { FlowState, MachineRates, PowerSummary, ProductionSummary, QuickSearch, SimSummary } from './Panels';
 import { analysePower, poleInfo } from './power';
 import { analyseRobots, isRoboportName, nodeOf, robotOverlay } from './robots';
+import { computeUnlocks, entityUnlocked, recipeUnlocked } from './unlocks';
 import type { SearchHit } from './search';
 import { buildBadges, buildViewOverlay, type ViewMode } from './views';
 import { GridRenderer } from './renderer';
@@ -192,6 +193,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
   // ---- rates, power and views ---------------------------------------------
 
   const rates = useMemo(() => computeLayoutRates(layout, gameData, research), [layout, research]);
+  const unlocks = useMemo(() => computeUnlocks(research), [research]);
   const power = useMemo(() => analysePower(layout.entities, rates), [layout.entities, rates]);
   // The steady-state simulation is heavier (~0.2 s per 1,000 buildings), so run it after edits settle.
   const [sim, setSim] = useState<SteadyStateResult | null>(null);
@@ -652,7 +654,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
   return (
     <div className="editor">
       <aside className="editor-palette">
-        <QuickSearch onPick={pickHit} />
+        <QuickSearch onPick={pickHit} unlocks={unlocks} />
         <div className="tool-row">
           <ToolButton active={tool.kind === 'select'} onClick={() => setTool({ kind: 'select' })} title="Select and pan (Esc)">Select</ToolButton>
           <ToolButton active={tool.kind === 'erase'} onClick={() => setTool({ kind: 'erase' })} title="Remove buildings (E, or right-click any time)">Remove</ToolButton>
@@ -678,12 +680,14 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
                 const def = ENTITIES[n];
                 if (!def) return null;
                 const active = tool.kind === 'build' && tool.name === n;
+                const locked = !entityUnlocked(unlocks, n);
                 return (
                   <button
                     key={n}
-                    className={`palette-item${active ? ' active' : ''}`}
+                    className={`palette-item${active ? ' active' : ''}${locked ? ' locked' : ''}`}
+                    disabled={locked && !active}
                     onClick={() => setTool(active ? { kind: 'select' } : { kind: 'build', name: n })}
-                    title={`${def.displayName} (${def.width}×${def.height})`}
+                    title={`${def.displayName} (${def.width}×${def.height})${locked ? ': not researched yet' : ''}`}
                   >
                     <span className="swatch" style={{ background: `#${entityColor(def).toString(16).padStart(6, '0')}` }}>
                       <img src={wikiIconUrl(def.displayName)} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
@@ -780,7 +784,10 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
                 </>
               )}
             </dl>
-            <MachineSettings entity={sel} def={selDef} onChange={(patch) => apply(updateEntity(layout, sel.id, patch))} />
+            {(!entityUnlocked(unlocks, sel.name) || (sel.recipe && gameData.recipes[sel.recipe] && !recipeUnlocked(unlocks, sel.recipe))) && (
+              <p className="locked-note">Not researched yet with the current research settings.</p>
+            )}
+            <MachineSettings entity={sel} def={selDef} unlocks={unlocks} onChange={(patch) => apply(updateEntity(layout, sel.id, patch))} />
             <FlowState state={sim?.entities[sel.id]} transport={sim?.transport[sel.id]} />
             <MachineRates rate={rates[sel.id]} status={power.status[sel.id]} />
             <div className="tool-row">

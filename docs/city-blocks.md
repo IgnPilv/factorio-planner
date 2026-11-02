@@ -81,3 +81,19 @@ own loop:
 Not yet confirmed in game: how `position-relative-to-grid` lines the cell up
 with the world grid. If a pasted cell lands off by a few tiles, the cell's contents
 are still right; only the grid offset needs adjusting.
+
+## Drive-through station
+
+Ticking **Drive-through station** adds one to every block. Trains on the top
+corridor's eastbound track turn right into the block (a 90° A-B-B-A turn), stop on
+a straight platform running south, then turn left onto the bottom corridor's
+eastbound track, crossing its westbound track on the level. The platform is
+`pitch − 28` tiles long (74 for a 102 block).
+
+Signals: a rail signal lets trains onto the platform and a chain signal lets them
+leave, because the exit merges and crosses. Wherever the track after a rail signal
+is shorter than the train, the planner turns that signal into a chain signal so a
+waiting train stays before the junction instead of inside it. The checks report
+whether the platform holds the train and whether the fork and merge stay clear of
+the corner junctions. Buildings that would sit on the new track are moved a few
+tiles aside.

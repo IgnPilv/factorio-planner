@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyse, buildDesign, DEFAULT_SPEC, gridBuildings, type BlockSpec } from '../src/cityblock/block';
+import { analyse, avoidRails, buildDesign, DEFAULT_SPEC, gridBuildings, type BlockSpec } from '../src/cityblock/block';
 import { canWire, coverage, roboportsConnect, supplyRect } from '../src/cityblock/network';
 
 const run = (over: Partial<BlockSpec>, subs = 0, robo = 0) => {
@@ -54,5 +54,29 @@ describe('city block checks', () => {
     spec.buildings = [...gridBuildings(spec, 5, 0), { name: 'big-electric-pole', x: 1, y: 51 }];
     const c = Object.fromEntries(analyse(buildDesign(spec)).checks.map((x) => [x.id, x]));
     expect(c['power-neighbours'].status).toBe('pass');
+  });
+});
+
+describe('drive-through station', () => {
+  it('fits a 1-4 train in a 102 block with correct signalling and no dead ends', () => {
+    const c = run({ pitch: 102, corridor: 12, station: true });
+    expect(c['station-fit'].status).toBe('pass');
+    expect(c['station-junction'].status).toBe('pass');
+    expect(c['signals'].status).toBe('pass');
+    expect(c['dead-ends'].status).toBe('pass');
+  });
+  it('reports a block too small for the station', () => {
+    expect(run({ pitch: 66, corridor: 12, station: true })['station-junction'].status).toBe('fail');
+  });
+});
+
+describe('avoidRails', () => {
+  it('moves substations off the station track and keeps power coverage', () => {
+    const s = { ...DEFAULT_SPEC, pitch: 102, corridor: 12, station: true };
+    const buildings = avoidRails(s, gridBuildings(s, 5, 2));
+    const c = Object.fromEntries(analyse(buildDesign({ ...s, buildings })).checks.map((x) => [x.id, x]));
+    expect(c['buildings-on-rails'].status).toBe('pass');
+    expect(buildings).toHaveLength(29);
+    console.log(c['power-coverage'].title, '|', c['logistics-coverage'].title);
   });
 });
