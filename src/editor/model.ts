@@ -83,10 +83,9 @@ export function canPlace(
     if (other && other !== ignoreId) return { ok: false, reason: 'Blocked by another building' };
   }
   if (def.kind === 'offshore-pump') {
-    // 2.0 offshore pump is 1x2: the back tile sits on land, the front tile
-    // (in the facing direction) must be water.
-    const front = offshoreFrontTile(x, y, direction);
-    const back = offshoreBackTile(x, y, direction);
+    // The pump stands on the shore facing the water: the tile it faces must be
+    // water and the tile behind it land (works for 1x1 and 1x2 pumps).
+    const [front, back] = offshoreTiles(rect, direction);
     if (!waterSet.has(tileKey(front[0], front[1]))) return { ok: false, reason: 'Offshore pump must face water' };
     if (waterSet.has(tileKey(back[0], back[1]))) return { ok: false, reason: 'Offshore pump needs land behind it' };
     return { ok: true };
@@ -95,17 +94,21 @@ export function canPlace(
   return { ok: true };
 }
 
-function offshoreTiles(x: number, y: number, d: Direction): [[number, number], [number, number]] {
-  // Returns [frontTile, backTile] for a 1x2 pump anchored at x,y.
+/**
+ * [front, back] tiles for a one-tile-wide offshore pump. A pump two tiles deep
+ * has its front tile in the water; a one-tile pump faces the tile beyond it.
+ */
+function offshoreTiles(rect: { x: number; y: number; w: number; h: number }, d: Direction): [[number, number], [number, number]] {
+  const { x, y, w, h } = rect;
+  const depth = d % 2 === 0 ? h : w;
+  const reach = depth >= 2 ? 0 : 1; // how far the front tile sits outside the footprint
   switch (d) {
-    case 0: return [[x, y], [x, y + 1]]; // facing north: front is the top tile
-    case 2: return [[x, y + 1], [x, y]];
-    case 1: return [[x + 1, y], [x, y]]; // facing east: footprint is 2x1
-    case 3: return [[x, y], [x + 1, y]];
+    case 0: return [[x, y - reach], [x, y + h - 1]];
+    case 2: return [[x, y + h - 1 + reach], [x, y]];
+    case 1: return [[x + w - 1 + reach, y], [x, y]];
+    case 3: return [[x - reach, y], [x + w - 1, y]];
   }
 }
-export const offshoreFrontTile = (x: number, y: number, d: Direction) => offshoreTiles(x, y, d)[0];
-export const offshoreBackTile = (x: number, y: number, d: Direction) => offshoreTiles(x, y, d)[1];
 
 /**
  * Offshore pumps snap to the shore like in the game: keep the requested

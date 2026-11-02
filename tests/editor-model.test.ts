@@ -52,15 +52,11 @@ describe('editor model', () => {
   });
 
   it('keeps buildings off water and needs water in front of an offshore pump', () => {
-    let l = setWater(emptyLayout(), [[0, 0], [1, 0], [0, -1], [1, -1]], true);
+    const l = setWater(emptyLayout(), [[0, 0], [1, 0], [0, -1], [1, -1]], true);
     expect(place(l, 'transport-belt', 0, 0).result.ok).toBe(false);
-    expect(place(l, 'offshore-pump', 0, -1).result.ok).toBe(false); // both tiles in water
-    const pumpOnShore = place(l, 'offshore-pump', 0, 1, 2); // facing south, front tile y=2 is land
-    expect(pumpOnShore.result.ok).toBe(false);
-    const good = place(l, 'offshore-pump', 0, 0, 0); // covers (0,0) water front and (0,1) land back
-    expect(good.result).toEqual({ ok: true });
-    l = good.layout;
-    expect(l.entities).toHaveLength(1);
+    expect(place(l, 'offshore-pump', 0, 0).result.ok).toBe(false); // standing in water
+    expect(place(l, 'offshore-pump', 0, 1, 2).result.ok).toBe(false); // facing away from water
+    expect(place(l, 'offshore-pump', 0, 1, 0).result).toEqual({ ok: true }); // on the shore, facing north into the lake
   });
 
   it('does not paint water under buildings', () => {
@@ -101,5 +97,20 @@ describe('offshore pump snapping', () => {
     const r = autoOrientOffshore(buildOccupancy(l.entities), new Set(l.water), 0, 0, 0);
     expect(r?.direction).toBe(1);
     expect(r && place(l, 'offshore-pump', r.x, r.y, r.direction).result.ok).toBe(true);
+  });
+});
+
+describe('machine settings', () => {
+  it('lists recipes, resources and allowed modules', async () => {
+    const { recipesFor, resourcesFor, modulesFor } = await import('../src/editor/MachineSettings');
+    const { ENTITIES } = await import('../src/editor/catalog');
+    expect(recipesFor(ENTITIES['stone-furnace']).map((r) => r.name)).toContain('iron-plate');
+    expect(recipesFor(ENTITIES['assembling-machine-2']).map((r) => r.name)).toContain('electronic-circuit');
+    expect(resourcesFor(ENTITIES['electric-mining-drill']).map((r) => r.name)).toContain('iron-ore');
+    expect(resourcesFor(ENTITIES['pumpjack']).map((r) => r.name)).toEqual(['crude-oil']);
+    // productivity modules are not allowed on a recipe without productivity (e.g. a building item)
+    const mods = modulesFor(ENTITIES['assembling-machine-3'], 'assembling-machine-1').map((m) => m.name);
+    expect(mods).toContain('speed-module');
+    expect(mods).not.toContain('productivity-module');
   });
 });

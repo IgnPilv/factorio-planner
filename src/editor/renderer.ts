@@ -2,8 +2,9 @@
 // drawing; knows nothing about React or editing rules.
 
 import { Application, Container, Graphics, Text } from 'pixi.js';
+import { gameData } from '../data';
 import { ENTITIES, entityColor, isRotatable, shortLabel } from './catalog';
-import { entityRect, footprint, tileKey, type Direction, type Layout, type PlacedEntity } from './model';
+import { entityRect, footprint, tileKey, type Direction, type Layout } from './model';
 
 export const TILE = 32;
 
@@ -242,6 +243,17 @@ export class GridRenderer {
         t.position.set(px + w / 2, py + h / 2);
         labels.push(t);
       }
+      const recipeName = e.recipe && (gameData.recipes[e.recipe]?.displayName ?? gameData.resources[e.recipe]?.displayName);
+      if (recipeName && r.w >= 2) {
+        const t = new Text({
+          text: recipeName,
+          style: { fontFamily: 'system-ui, sans-serif', fontSize: 9, fill: 0xffe6a0, wordWrap: true, wordWrapWidth: w - 6, align: 'center' },
+        });
+        t.resolution = 2;
+        t.anchor.set(0.5, 0);
+        t.position.set(px + w / 2, py + h / 2 + 9);
+        labels.push(t);
+      }
       const badge = this.badges[e.id];
       if (badge) {
         const t = new Text({ text: badge, style: { fontFamily: 'system-ui, sans-serif', fontSize: 10, fill: 0xffffff } });
@@ -325,4 +337,3 @@ function drawChevrons(g: Graphics, px: number, py: number, d: Direction) {
   }
 }
 
-export type { PlacedEntity };

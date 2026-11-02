@@ -16,7 +16,15 @@ export function App() {
           <button className={view === 'data' ? 'active' : ''} onClick={() => setView('data')}>Items and recipes</button>
         </nav>
       </header>
-      <div className="view">{view === 'layout' ? <LayoutEditor /> : <DataBrowser />}</div>
+      {/* The editor stays mounted so its camera and undo history survive a tab switch. */}
+      <div className="view" hidden={view !== 'layout'}>
+        <LayoutEditor />
+      </div>
+      {view === 'data' && (
+        <div className="view">
+          <DataBrowser />
+        </div>
+      )}
     </div>
   );
 }

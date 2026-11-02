@@ -19,7 +19,9 @@ import {
   type Layout,
   type PlacedEntity,
 } from './model';
+import { MachineSettings } from './MachineSettings';
 import { GridRenderer } from './renderer';
+import { wikiIconUrl } from '../data';
 import './editor.css';
 
 export type Tool =
@@ -465,7 +467,9 @@ export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
                     onClick={() => setTool(active ? { kind: 'select' } : { kind: 'build', name: n })}
                     title={`${def.displayName} (${def.width}×${def.height})`}
                   >
-                    <span className="swatch" style={{ background: `#${entityColor(def).toString(16).padStart(6, '0')}` }} />
+                    <span className="swatch" style={{ background: `#${entityColor(def).toString(16).padStart(6, '0')}` }}>
+                      <img src={wikiIconUrl(def.displayName)} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
+                    </span>
                     <span className="palette-name">{def.displayName}</span>
                   </button>
                 );
@@ -523,13 +527,8 @@ export function LayoutEditor({ badges, onLayoutChange }: LayoutEditorProps) {
                 <dd>{DIR_NAMES[sel.direction]}</dd>
               </>
             )}
-            {sel.recipe && (
-              <>
-                <dt>Recipe</dt>
-                <dd>{sel.recipe}</dd>
-              </>
-            )}
           </dl>
+          <MachineSettings entity={sel} def={selDef} onChange={(patch) => apply(updateEntity(layout, sel.id, patch))} />
           <div className="tool-row">
             {isRotatable(selDef) && <button onClick={() => apply(rotateEntity(layout, sel.id))}>Rotate</button>}
             <button

@@ -64,3 +64,4 @@ table.grid th { background: var(--panel); }
 .view-tabs button.active { background: var(--accent); color: #111; border-color: var(--accent); }
 .view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .view > * { flex: 1; min-height: 0; }
+.view[hidden] { display: none; }

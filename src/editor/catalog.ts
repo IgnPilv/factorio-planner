@@ -1,59 +1,10 @@
-// Building catalog used by the layout editor.
-//
-// Until the generated game data (data/nauvis.json) lands, this is a small
-// hand-written stand-in typed against the shared contract in src/data/types.ts,
-// so swapping to the real data is only a change of import. Footprints are the
-// Factorio 2.0 base-game sizes, width x height when facing north.
+// Building catalog for the layout editor: the placeable buildings from the
+// generated game data, plus editor-only presentation (colours, hotbar groups).
 
+import { gameData } from '../data';
 import type { Entity, EntityKind } from '../data/types';
 
-const wiki = (displayName: string) =>
-  `https://wiki.factorio.com/${displayName.replace(/ /g, '_')}`;
-
-function e(name: string, displayName: string, kind: EntityKind, prototype: string, width: number, height: number): Entity {
-  return { name, displayName, kind, prototype, width, height, item: name, icon: `__base__/graphics/icons/${name}.png`, wikiUrl: wiki(displayName) };
-}
-
-const LIST: Entity[] = [
-  e('transport-belt', 'Transport belt', 'belt', 'transport-belt', 1, 1),
-  e('fast-transport-belt', 'Fast transport belt', 'belt', 'transport-belt', 1, 1),
-  e('express-transport-belt', 'Express transport belt', 'belt', 'transport-belt', 1, 1),
-  e('burner-inserter', 'Burner inserter', 'inserter', 'inserter', 1, 1),
-  e('inserter', 'Inserter', 'inserter', 'inserter', 1, 1),
-  e('long-handed-inserter', 'Long-handed inserter', 'inserter', 'inserter', 1, 1),
-  e('fast-inserter', 'Fast inserter', 'inserter', 'inserter', 1, 1),
-  e('pipe', 'Pipe', 'pipe', 'pipe', 1, 1),
-  e('small-electric-pole', 'Small electric pole', 'pole', 'electric-pole', 1, 1),
-  e('medium-electric-pole', 'Medium electric pole', 'pole', 'electric-pole', 1, 1),
-  e('big-electric-pole', 'Big electric pole', 'pole', 'electric-pole', 2, 2),
-  e('substation', 'Substation', 'pole', 'electric-pole', 2, 2),
-  e('wooden-chest', 'Wooden chest', 'chest', 'container', 1, 1),
-  e('iron-chest', 'Iron chest', 'chest', 'container', 1, 1),
-  e('steel-chest', 'Steel chest', 'chest', 'container', 1, 1),
-  e('storage-tank', 'Storage tank', 'storage-tank', 'storage-tank', 3, 3),
-  e('burner-mining-drill', 'Burner mining drill', 'mining-drill', 'mining-drill', 2, 2),
-  e('electric-mining-drill', 'Electric mining drill', 'mining-drill', 'mining-drill', 3, 3),
-  e('pumpjack', 'Pumpjack', 'mining-drill', 'mining-drill', 3, 3),
-  e('offshore-pump', 'Offshore pump', 'offshore-pump', 'offshore-pump', 1, 2),
-  e('stone-furnace', 'Stone furnace', 'furnace', 'furnace', 2, 2),
-  e('steel-furnace', 'Steel furnace', 'furnace', 'furnace', 2, 2),
-  e('electric-furnace', 'Electric furnace', 'furnace', 'furnace', 3, 3),
-  e('assembling-machine-1', 'Assembling machine 1', 'assembler', 'assembling-machine', 3, 3),
-  e('assembling-machine-2', 'Assembling machine 2', 'assembler', 'assembling-machine', 3, 3),
-  e('assembling-machine-3', 'Assembling machine 3', 'assembler', 'assembling-machine', 3, 3),
-  e('oil-refinery', 'Oil refinery', 'refinery', 'assembling-machine', 5, 5),
-  e('chemical-plant', 'Chemical plant', 'chemical-plant', 'assembling-machine', 3, 3),
-  e('centrifuge', 'Centrifuge', 'centrifuge', 'assembling-machine', 3, 3),
-  e('boiler', 'Boiler', 'boiler', 'boiler', 3, 2),
-  e('steam-engine', 'Steam engine', 'generator', 'generator', 3, 5),
-  e('solar-panel', 'Solar panel', 'solar-panel', 'solar-panel', 3, 3),
-  e('accumulator', 'Accumulator', 'accumulator', 'accumulator', 2, 2),
-  e('lab', 'Lab', 'lab', 'lab', 3, 3),
-  e('beacon', 'Beacon', 'beacon', 'beacon', 3, 3),
-  e('rocket-silo', 'Rocket silo', 'rocket-silo', 'rocket-silo', 9, 9),
-];
-
-export const ENTITIES: Record<string, Entity> = Object.fromEntries(LIST.map((x) => [x.name, x]));
+export const ENTITIES: Record<string, Entity> = gameData.entities;
 
 /** Kinds whose direction matters (or whose footprint changes when rotated). */
 const ROTATABLE: ReadonlySet<EntityKind> = new Set<EntityKind>([
@@ -70,6 +21,8 @@ const KIND_COLOR: Partial<Record<EntityKind, number>> = {
   boiler: 0x8a8a8a, generator: 0x6e6e6e, 'chemical-plant': 0x4f8f5a, refinery: 0x7a6a5a,
   centrifuge: 0x5a8a5a, lab: 0x9fb5c9, beacon: 0x7a5fa8, 'solar-panel': 0x2f4f7f,
   accumulator: 0x5f6f5f, 'storage-tank': 0x777f88, 'rocket-silo': 0x55606a,
+  'underground-belt': 0xb8912a, splitter: 0xd8b13a, 'pipe-to-ground': 0x5c6a79, pump: 0x5a7a9a,
+  reactor: 0x4a7a4a, 'heat-exchanger': 0x9a6a5a, 'steam-turbine': 0x7a7a7a,
 };
 const NAME_COLOR: Record<string, number> = {
   'fast-transport-belt': 0xc8463b, 'express-transport-belt': 0x3b8bd0,
@@ -78,6 +31,10 @@ const NAME_COLOR: Record<string, number> = {
   'steel-furnace': 0x8a5a4a, 'electric-furnace': 0x9a4a3a, 'pumpjack': 0x6a5a7a,
   'medium-electric-pole': 0x8f8f8f, 'big-electric-pole': 0x6f6f6f, substation: 0x5a6a5a,
   'iron-chest': 0x8a8f96, 'steel-chest': 0x9aa3ab, 'burner-mining-drill': 0x6f5f3a,
+  'fast-underground-belt': 0xc8463b, 'express-underground-belt': 0x3b8bd0,
+  'fast-splitter': 0xc8463b, 'express-splitter': 0x3b8bd0, 'bulk-inserter': 0x4a9a4a,
+  'active-provider-chest': 0x9a4a8a, 'passive-provider-chest': 0xb04a4a, 'storage-chest': 0xb09a3a,
+  'buffer-chest': 0x4a9a4a, 'requester-chest': 0x3a6ab0,
 };
 export const entityColor = (ent: Entity) => NAME_COLOR[ent.name] ?? KIND_COLOR[ent.kind] ?? 0x888888;
 
@@ -88,8 +45,28 @@ export function shortLabel(ent: Entity): string {
   return words.map((w) => (/^\d$/.test(w) ? w : w[0].toUpperCase())).join('');
 }
 
-export const HOTBAR_GROUPS: { title: string; names: string[] }[] = [
-  { title: 'Logistics', names: ['transport-belt', 'fast-transport-belt', 'express-transport-belt', 'burner-inserter', 'inserter', 'long-handed-inserter', 'fast-inserter', 'pipe', 'wooden-chest', 'iron-chest', 'steel-chest', 'storage-tank'] },
-  { title: 'Power and water', names: ['offshore-pump', 'boiler', 'steam-engine', 'small-electric-pole', 'medium-electric-pole', 'big-electric-pole', 'substation', 'solar-panel', 'accumulator'] },
-  { title: 'Production', names: ['burner-mining-drill', 'electric-mining-drill', 'pumpjack', 'stone-furnace', 'steel-furnace', 'electric-furnace', 'assembling-machine-1', 'assembling-machine-2', 'assembling-machine-3', 'oil-refinery', 'chemical-plant', 'centrifuge', 'lab', 'beacon', 'rocket-silo'] },
+/** Palette groups, in the order the game's crafting menu roughly uses. */
+const GROUPS: { title: string; kinds: EntityKind[] }[] = [
+  { title: 'Belts', kinds: ['belt', 'underground-belt', 'splitter'] },
+  { title: 'Inserters and storage', kinds: ['inserter', 'chest', 'storage-tank'] },
+  { title: 'Water and fluids', kinds: ['offshore-pump', 'pipe', 'pipe-to-ground', 'pump'] },
+  { title: 'Power', kinds: ['pole', 'boiler', 'generator', 'solar-panel', 'accumulator', 'reactor', 'heat-exchanger', 'steam-turbine'] },
+  { title: 'Mining and smelting', kinds: ['mining-drill', 'furnace'] },
+  { title: 'Production', kinds: ['assembler', 'refinery', 'chemical-plant', 'centrifuge', 'lab', 'beacon', 'rocket-silo'] },
 ];
+
+export const HOTBAR_GROUPS: { title: string; names: string[] }[] = (() => {
+  const all = Object.values(ENTITIES);
+  const used = new Set<string>();
+  const groups = GROUPS.map((g) => {
+    const names = all
+      .filter((e) => g.kinds.includes(e.kind))
+      .sort((a, b) => g.kinds.indexOf(a.kind) - g.kinds.indexOf(b.kind) || a.name.localeCompare(b.name, 'en', { numeric: true }))
+      .map((e) => e.name);
+    names.forEach((n) => used.add(n));
+    return { title: g.title, names };
+  });
+  const rest = all.filter((e) => !used.has(e.name)).map((e) => e.name);
+  if (rest.length) groups.push({ title: 'Other', names: rest });
+  return groups.filter((g) => g.names.length);
+})();

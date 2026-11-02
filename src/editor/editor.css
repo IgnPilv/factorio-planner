@@ -10,7 +10,8 @@
 .tool-row > button { flex: 1; }
 .palette-grid { display: grid; grid-template-columns: 1fr; gap: 2px; }
 .palette-item { display: flex; align-items: center; gap: 8px; text-align: left; padding: 3px 6px !important; }
-.swatch { width: 14px; height: 14px; border-radius: 3px; flex: none; border: 1px solid #000; }
+.swatch { width: 20px; height: 20px; border-radius: 3px; flex: none; border: 1px solid #000; overflow: hidden; }
+.swatch img { width: 100%; height: 100%; display: block; background: #2d2d2d; }
 .palette-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .brush { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; color: #bbb; }
 
@@ -37,3 +38,6 @@
   .editor-inspector { width: auto; border-left: 0; border-top: 1px solid #333; }
   .editor-status .hint { display: none; }
 }
+.machine-settings { display: flex; flex-direction: column; gap: 8px; }
+.machine-settings label, .machine-settings .modules { display: flex; flex-direction: column; gap: 4px; color: #999; }
+.machine-settings select { font: inherit; color: #e6e6e6; background: #2d2d2d; border: 1px solid #444; border-radius: 4px; padding: 4px; }
