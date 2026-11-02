@@ -324,3 +324,20 @@ describe('inserter filters, splitter settings and chest requests', () => {
     expect(clipboard!.entities[1]!.requests).toEqual([{ name: 'coal', count: 50 }]);
   });
 });
+
+describe('blueprints with rails', () => {
+  it('skips signals, stops and trains along with the rails', () => {
+    const { clipboard, unknown } = blueprintToClipboard({
+      item: 'blueprint',
+      version: encodeVersion(0, 18, 1),
+      entities: [
+        { entity_number: 1, name: 'straight-rail', position: { x: 1, y: 1 } },
+        { entity_number: 2, name: 'rail-signal', position: { x: 2.5, y: 0.5 } },
+        { entity_number: 3, name: 'roboport', position: { x: 10, y: 10 } },
+        { entity_number: 4, name: 'advanced-substation', position: { x: 20, y: 20 } },
+      ],
+    });
+    expect(clipboard!.entities.map((e) => e.name)).toEqual(['roboport']);
+    expect(unknown).toEqual({ 'straight-rail': 1, 'rail-signal': 1, 'advanced-substation': 1 });
+  });
+});

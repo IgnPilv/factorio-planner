@@ -250,6 +250,9 @@ function pipeToGroundDirections(entities: readonly PlacedEntity[]): Map<string, 
  * is a different (Space Age) building in 2.0. Filter inserters became the
  * filter setting on ordinary inserters.
  */
+const RAIL_PIECE = /(^|-)(straight|curved|half-diagonal)-rail(-[ab])?$|^rail-ramp$|^rail-support$/;
+const RAIL_PARTS = new Set(['rail-signal', 'train-stop', 'rolling-stock']);
+
 const LEGACY_NAMES: Record<string, string> = {
   'logistic-chest-active-provider': 'active-provider-chest',
   'logistic-chest-passive-provider': 'passive-provider-chest',
@@ -274,10 +277,13 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
   // 1.1 and older use 8-way directions; 2.0 (internally 1.2 while in development) uses 16-way.
   const legacy = (bp.version ?? 0) < encodeVersion(1, 2);
   const placed: Omit<PlacedEntity, 'id'>[] = [];
+  // The layout editor has no rails: when a blueprint's rails are skipped, its
+  // signals, stops and trains go too, rather than floating on empty ground.
+  const hasRails = (bp.entities ?? []).some((e) => RAIL_PIECE.test(e.name));
   for (const orig of bp.entities ?? []) {
     const be = legacy && LEGACY_NAMES[orig.name] ? { ...orig, name: LEGACY_NAMES[orig.name]! } : orig;
     const def = ENTITIES[be.name];
-    if (!def) {
+    if (!def || (hasRails && RAIL_PARTS.has(def.kind))) {
       unknown[be.name] = (unknown[be.name] ?? 0) + 1;
       continue;
     }
