@@ -42,8 +42,12 @@ export interface Ghost {
 export interface ViewOverlay {
   /** Filled areas drawn under the buildings (pole supply areas). */
   areas?: { x0: number; y0: number; x1: number; y1: number; color: number; alpha: number }[];
-  /** Lines drawn over the buildings (power wires). */
+  /** Lines drawn over the buildings (power wires). Width is in screen pixels, so wires stay visible when zoomed out. */
   lines?: { x1: number; y1: number; x2: number; y2: number; color: number; width: number }[];
+  /** Dots at pole centres (wire anchors), radius in screen pixels. */
+  dots?: { x: number; y: number; color: number; r: number }[];
+  /** Small status markers in a building's top-right corner (e.g. no power). */
+  markers?: { id: string; color: number }[];
   /** Colour washes over individual buildings (power status, belt tier). */
   tints?: { id: string; color: number; alpha: number }[];
   /** Buildings to fade out because they don't matter in this view. */
@@ -209,6 +213,7 @@ export class GridRenderer {
     for (let ty = Math.ceil(y0 / C) * C; ty <= y1; ty += C) grid.moveTo(x0 * TILE, ty * TILE).lineTo(x1 * TILE, ty * TILE);
     grid.stroke({ width: px * 1.5, color: COLORS.gridMajor, alpha: 0.35 });
 
+    if (this.view.lines?.length || this.view.dots?.length) this.drawViewOverlay();
     // Labels are hidden when zoomed far out, where they would be unreadable.
     for (const child of this.entities.children) if (child instanceof Text) child.visible = zoom >= 0.45;
   }
@@ -298,7 +303,8 @@ export class GridRenderer {
   private drawViewOverlay() {
     const under = this.viewUnder.clear();
     const over = this.viewOver.clear();
-    const { areas, lines, tints, dim } = this.view;
+    const { areas, lines, tints, dim, dots, markers } = this.view;
+    const z = this.camera.zoom;
     for (const a of areas ?? [])
       under.rect(a.x0 * TILE, a.y0 * TILE, (a.x1 - a.x0) * TILE, (a.y1 - a.y0) * TILE).fill({ color: a.color, alpha: a.alpha });
     if (dim?.size || tints?.length) {
@@ -320,7 +326,22 @@ export class GridRenderer {
       }
     }
     for (const l of lines ?? [])
-      over.moveTo(l.x1 * TILE, l.y1 * TILE).lineTo(l.x2 * TILE, l.y2 * TILE).stroke({ width: l.width, color: l.color, alpha: 0.9 });
+      over.moveTo(l.x1 * TILE, l.y1 * TILE).lineTo(l.x2 * TILE, l.y2 * TILE).stroke({ width: l.width / z, color: l.color, alpha: 0.95 });
+    for (const d of dots ?? []) over.circle(d.x * TILE, d.y * TILE, d.r / z).fill({ color: d.color });
+    if (markers?.length) {
+      const byId = new Map(this.layout.entities.map((e) => [e.id, e]));
+      for (const m of markers) {
+        const e = byId.get(m.id);
+        if (!e) continue;
+        const r = entityRect(e);
+        const rad = Math.min((Math.min(r.w, r.h) * TILE) / 3, 7 / z);
+        const cx = (r.x + r.w) * TILE - rad - 2;
+        const cy = r.y * TILE + rad + 2;
+        over.circle(cx, cy, rad).fill({ color: m.color }).stroke({ width: 1.5, color: 0x000000 });
+        // lightning bolt glyph
+        over.poly([cx + rad * 0.15, cy - rad * 0.7, cx - rad * 0.45, cy + rad * 0.1, cx - rad * 0.02, cy + rad * 0.1, cx - rad * 0.15, cy + rad * 0.7, cx + rad * 0.45, cy - rad * 0.1, cx + rad * 0.02, cy - rad * 0.1]).fill({ color: 0x1b1b1b });
+      }
+    }
   }
 
   private drawOverlay() {

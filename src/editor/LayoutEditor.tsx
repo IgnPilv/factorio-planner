@@ -73,6 +73,22 @@ function resolvePlacement(layout: Layout, name: string, dir: Direction, cx: numb
  */
 const UNLOCK_ALL = Object.fromEntries(Object.values(gameData.technologies).filter((t) => !t.affectsRates).map((t) => [t.name, 1]));
 
+function readPref(key: string, fallback: boolean): boolean {
+  try {
+    const v = localStorage.getItem(`factorio-planner.pref.${key}`);
+    return v === null ? fallback : v === '1';
+  } catch {
+    return fallback;
+  }
+}
+function writePref(key: string, value: boolean) {
+  try {
+    localStorage.setItem(`factorio-planner.pref.${key}`, value ? '1' : '0');
+  } catch {
+    /* ignore */
+  }
+}
+
 const VIEW_LABELS: Record<ViewMode, string> = { normal: 'Normal', electric: 'Electric', logistics: 'Logistics' };
 const VIEW_ORDER: ViewMode[] = ['normal', 'electric', 'logistics'];
 
@@ -97,6 +113,10 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
   const [cursor, setCursor] = useState<[number, number] | null>(null);
   const [message, setMessage] = useState<string>('');
   const [view, setView] = useState<ViewMode>('normal');
+  const [showWires, setShowWires] = useState(() => readPref('wires', true));
+  const [showCoverage, setShowCoverage] = useState(() => readPref('coverage', false));
+  useEffect(() => writePref('wires', showWires), [showWires]);
+  useEffect(() => writePref('coverage', showCoverage), [showCoverage]);
 
   // Undo/redo history of whole layouts (cheap: arrays are shared structurally).
   const past = useRef<Layout[]>([]);
@@ -179,10 +199,10 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
     }
     return null;
   }, [tool, cursor, direction, layout, selected]);
-  const showPoleAreas = polePreview !== null;
+  const showPoleAreas = showCoverage || polePreview !== null;
   useEffect(
-    () => rendererRef.current?.setView(buildViewOverlay(view, layout.entities, power, { polePreview, showPoleAreas })),
-    [view, layout.entities, power, polePreview, showPoleAreas],
+    () => rendererRef.current?.setView(buildViewOverlay(view, layout.entities, power, { polePreview, showPoleAreas, showWires })),
+    [view, layout.entities, power, polePreview, showPoleAreas, showWires],
   );
   useEffect(() => setMessage(''), [tool]);
 
@@ -488,6 +508,10 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
         }
       } else if (k === 'v' && !ev.ctrlKey && !ev.metaKey) {
         setView((v) => VIEW_ORDER[(VIEW_ORDER.indexOf(v) + 1) % VIEW_ORDER.length]);
+      } else if (k === 'l' && !ev.ctrlKey && !ev.metaKey) {
+        setShowWires((v) => !v);
+      } else if (k === 'c' && !ev.ctrlKey && !ev.metaKey) {
+        setShowCoverage((v) => !v);
       } else if (k === 'w' && !ev.ctrlKey) setTool({ kind: 'water' });
       else if (k === 'e' && !ev.ctrlKey) setTool({ kind: 'erase' });
       else if (k === '[' || k === '-') setBrush((b) => Math.max(1, b - 1));
@@ -622,6 +646,12 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
               </button>
             ))}
           </span>
+          <label className="toggle" title="Show copper wires between electric poles (L)">
+            <input type="checkbox" checked={showWires} onChange={(e) => setShowWires(e.target.checked)} /> Wires
+          </label>
+          <label className="toggle" title="Show the area each electric pole powers (C)">
+            <input type="checkbox" checked={showCoverage} onChange={(e) => setShowCoverage(e.target.checked)} /> Coverage
+          </label>
           <span className="sep" />
           {tool.kind === 'paste' && clip && (
             <span className="hand">
