@@ -336,7 +336,7 @@ export function Bottlenecks({ sim, entities, onSelect }: { sim: SteadyStateResul
                 {BOTTLENECK_TEXT[b.kind]}
                 {items && ` ${items}`}
               </span>
-              {b.lost > 0.005 && <span className="muted small"> · {fmtRate(b.lost)} machines' worth lost</span>}
+              {b.lost > 0.005 && <span className="muted small"> · {fmtRate(b.lost)} {Math.abs(b.lost - 1) < 0.005 ? "machine's" : "machines'"} worth lost</span>}
             </li>
           );
         })}
