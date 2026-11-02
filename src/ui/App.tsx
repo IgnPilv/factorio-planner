@@ -1,8 +1,13 @@
+import { DataBrowser } from './DataBrowser';
+
 export function App() {
   return (
-    <main className="app">
-      <h1>Factorio Planner</h1>
-      <p>Layout editor and rate calculator for Factorio on Nauvis. Work in progress.</p>
-    </main>
+    <div className="app">
+      <header className="topbar">
+        <h1>Factorio Planner</h1>
+        <span className="muted">Nauvis · base game</span>
+      </header>
+      <DataBrowser />
+    </div>
   );
 }

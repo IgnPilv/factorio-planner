@@ -23,6 +23,8 @@ export interface Item {
   /** Human-readable name, derived from the prototype name. */
   displayName: string;
   stackSize?: number;
+  /** Internal items (e.g. rocket-part) that never show in the game's menus. */
+  hidden?: boolean;
   /** Entity this item places, if any. */
   placeResult?: string;
   /** Fuel value in joules. */
@@ -58,7 +60,10 @@ export interface Product {
 export interface Recipe {
   name: string;
   displayName: string;
+  /** First of `categories`; most recipes have exactly one. */
   category: string;
+  /** Machine categories that can craft it (Factorio 2.1 allows several). */
+  categories: string[];
   /** Seconds per craft at crafting speed 1. */
   time: number;
   ingredients: Ingredient[];
@@ -164,8 +169,8 @@ export interface Entity {
   maxDistance?: number;
   /** Inserter rotation speed in turns per tick. */
   rotationSpeed?: number;
-  /** Inserter base stack size bonus-free hand size. */
-  inserterStackSize?: number;
+  /** Bulk inserters get the bulk capacity research bonus. */
+  bulk?: boolean;
   /** Electric pole supply area side length and wire reach in tiles. */
   supplyAreaDistance?: number;
   wireReach?: number;

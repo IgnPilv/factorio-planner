@@ -17,6 +17,20 @@ npm test           # unit tests
 npm run build      # type-check and production build
 ```
 
+## Game data
+
+`data/nauvis.json` is generated from the game's prototype files and committed, so the app needs
+no network access to game data. To refresh it for a new Factorio release:
+
+```sh
+git clone --depth 1 https://github.com/wube/factorio-data .factorio-data
+npm run extract-data -- .factorio-data
+npm test
+```
+
+The extractor reads the Lua files as text and never runs them. Types for the generated file are
+in `src/data/types.ts`. Icons are loaded from the Factorio wiki.
+
 ## Layout
 
 - `src/data/` shared game-data types (`types.ts`) and loaders
