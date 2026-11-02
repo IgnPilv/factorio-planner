@@ -183,6 +183,10 @@ export interface Entity {
   maxDistance?: number;
   /** Inserter rotation speed in turns per tick. */
   rotationSpeed?: number;
+  /** Inserters: energy for one full turn of the arm, in J (factorio-data energy_per_rotation). */
+  energyPerRotation?: number;
+  /** Inserters: energy per tile the hand extends or retracts, in J. */
+  energyPerMovement?: number;
   /** Bulk inserters get the bulk capacity research bonus. */
   bulk?: boolean;
   /** Electric pole supply area side length and wire reach in tiles. */

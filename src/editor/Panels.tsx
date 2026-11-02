@@ -231,6 +231,7 @@ export function FlowState({ state, transport }: { state?: EntityState; transport
         <p>
           {fmtRate(transport.perSecond)}/s of {fmtRate(transport.capacity)}/s ({Math.round(transport.utilization * 100)}%)
         </p>
+        {transport.powerW !== undefined && <p className="muted small">Draws {formatWatts(transport.powerW)}.</p>}
         {transport.powerShare === 0 && <p className="warn">No power: no electric pole reaches this inserter.</p>}
         {transport.powerShare !== undefined && transport.powerShare > 0 && (
           <p className="warn">Low power: runs at {Math.round(transport.powerShare * 100)}% speed.</p>
