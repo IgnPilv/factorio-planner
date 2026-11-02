@@ -38,6 +38,14 @@ describe('power networks', () => {
     expect(Object.values(p.status)).toEqual(['no-power']);
   });
 
+  it('counts the steady draw of radars and lamps', () => {
+    let l = place(emptyLayout(), 'medium-electric-pole', 0, 0);
+    l = place(l, 'radar', 1, 1);
+    l = place(l, 'small-lamp', 1, 0);
+    const p = analysePower(l.entities, computeLayoutRates(l, gameData));
+    expect(p.networks[0]!.demandW).toBeCloseTo(305e3);
+  });
+
   it('splits poles out of reach into separate networks', () => {
     let l = place(emptyLayout(), 'small-electric-pole', 0, 0);
     l = place(l, 'small-electric-pole', 20, 0);

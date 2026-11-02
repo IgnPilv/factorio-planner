@@ -74,6 +74,8 @@ export function poleInfo(p: PlacedEntity): PoleInfo | null {
   return { id: p.id, cx, cy, reach: def.wireReach ?? 7.5, area: { x0: cx - d, y0: cy - d, x1: cx + d, y1: cy + d } };
 }
 
+const STEADY_DRAW = new Set(['radar', 'lamp', 'turret', 'combinator', 'circuit']);
+
 export function analysePower(entities: readonly PlacedEntity[], rates: Record<string, EntityRate>): PowerReport {
   const poles = entities.map(poleInfo).filter((p): p is PoleInfo => p !== null);
 
@@ -122,7 +124,8 @@ export function analysePower(entities: readonly PlacedEntity[], rates: Record<st
     const box = { x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h };
     // A machine belongs to the first network whose pole covers any of its tiles.
     const pole = poles.find((p) => overlaps(p.area, box));
-    const power = rates[e.id]?.powerW ?? 0;
+    // Buildings without a production rate (radars, lamps, turrets, combinators) draw a steady amount.
+    const power = def && STEADY_DRAW.has(def.kind) ? (def.energyUsage ?? def.drain ?? 0) : (rates[e.id]?.powerW ?? 0);
     if (!pole) {
       if (consumer) {
         status[e.id] = 'unconnected';

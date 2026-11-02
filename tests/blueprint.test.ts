@@ -186,6 +186,14 @@ describe('blueprint import', () => {
       ent('medium-electric-pole', 8, 4),
       ent('offshore-pump', 10, 0, 2),
       ent('boiler', 12, 0, 1),
+      ent('radar', 16, 0),
+      ent('arithmetic-combinator', 20, 0, 1),
+      ent('decider-combinator', 23, 0, 2),
+      ent('gate', 26, 0, 1),
+      ent('stone-wall', 27, 0),
+      ent('small-lamp', 28, 0),
+      ent('laser-turret', 30, 0),
+      ent('heat-pipe', 33, 0),
     ];
     const s = encodeBlueprintString(layoutToBlueprint(layout).blueprint);
     const { clipboard } = blueprintToClipboard(decodeBlueprintString(s));

@@ -16,6 +16,7 @@ const protoDir = path.join(root, 'base', 'prototypes');
 const FILES = [
   'item.lua', 'fluid.lua', 'recipe.lua', 'technology.lua',
   'entity/entities.lua', 'entity/mining-drill.lua', 'entity/transport-belts.lua', 'entity/resources.lua', 'entity/trains.lua',
+  'entity/turrets.lua', 'entity/circuit-network.lua',
 ];
 
 const raw = {};
@@ -138,6 +139,10 @@ const KIND_BY_TYPE = {
   'storage-tank': 'storage-tank', 'electric-pole': 'pole', container: 'chest', 'logistic-container': 'chest',
   lab: 'lab', 'rocket-silo': 'rocket-silo', 'assembling-machine': 'assembler',
   roboport: 'roboport', 'rail-signal': 'rail-signal', 'rail-chain-signal': 'rail-signal', 'train-stop': 'train-stop',
+  radar: 'radar', lamp: 'lamp', wall: 'wall', gate: 'gate', 'heat-pipe': 'heat-pipe',
+  'ammo-turret': 'turret', 'electric-turret': 'turret', 'fluid-turret': 'turret', 'artillery-turret': 'turret',
+  'constant-combinator': 'combinator', 'arithmetic-combinator': 'combinator', 'decider-combinator': 'combinator', 'selector-combinator': 'combinator',
+  'power-switch': 'circuit', 'programmable-speaker': 'circuit', 'display-panel': 'circuit',
   locomotive: 'rolling-stock', 'cargo-wagon': 'rolling-stock', 'fluid-wagon': 'rolling-stock', 'artillery-wagon': 'rolling-stock',
 };
 function kindOf(p) {
@@ -162,7 +167,7 @@ for (const [type, group] of Object.entries(raw)) {
     const [width, height] = footprint(p);
     const es = p.energy_source ?? {};
     const energySource = es.type;
-    let energyUsage = energy(p.energy_usage ?? p.energy_consumption ?? p.consumption);
+    let energyUsage = energy(p.energy_usage ?? p.energy_usage_per_tick ?? p.energy_consumption ?? p.consumption ?? p.active_energy_usage);
     let drain = energy(es.drain);
     if (drain === undefined && energySource === 'electric' && CRAFTERS.has(type) && energyUsage) drain = energyUsage / 30;
     const e = {
