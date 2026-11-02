@@ -83,6 +83,7 @@ export class GridRenderer {
   private ghost: Ghost = { items: [] };
   private view: ViewOverlay = {};
   private textures = new Map<string, Texture>();
+  private contents: Record<string, string[]> = {};
 
   async init(host: HTMLElement) {
     await this.app.init({
@@ -168,6 +169,12 @@ export class GridRenderer {
 
   setBadges(badges: Record<string, string>) {
     this.badges = badges;
+    if (this.ready) this.drawEntities();
+  }
+
+  /** Item icons on belts, inserters and chests (see contents.ts). */
+  setContents(contents: Record<string, string[]>) {
+    this.contents = contents;
     if (this.ready) this.drawEntities();
   }
 
@@ -288,7 +295,8 @@ export class GridRenderer {
     const body = new Graphics();
     const icons = new Container();
     const marks = new Graphics();
-    this.entities.addChild(body, icons, marks);
+    const carried = new Container(); // alt-mode item icons, above the arrows
+    this.entities.addChild(body, icons, marks, carried);
     const labels: Text[] = [];
 
     for (const e of this.layout.entities) {
@@ -319,6 +327,25 @@ export class GridRenderer {
           : this.icon(e.name, 'entity', cx, cy, short <= TILE ? TILE * 0.75 : Math.min(short * 0.6, TILE * 2.5));
       if (product) icons.addChild(product);
       if (own) icons.addChild(own);
+
+      // What it carries, on a dark disc like the game's alt-mode.
+      const items = this.contents[e.id];
+      if (items?.length) {
+        const sz = TILE * (def.kind === 'chest' ? 0.62 : def.kind === 'inserter' ? 0.48 : 0.4);
+        const n = items.length;
+        // Inserters: bottom-right corner so the arm's arrow stays readable.
+        const ox = def.kind === 'inserter' ? px + w - sz / 2 - 1 : cx;
+        const oy = def.kind === 'inserter' ? py + h - sz / 2 - 1 : cy;
+        const along = w >= h ? [1, 0] : [0, 1];
+        items.forEach((name, i) => {
+          const off = n > 1 ? (i - (n - 1) / 2) * sz * 1.05 : 0;
+          const x = ox + along[0] * off, y = oy + along[1] * off;
+          const sp = this.icon(name, 'item', x, y, sz);
+          if (!sp) return;
+          const disc = new Graphics().circle(x, y, sz * 0.58).fill({ color: 0x000000, alpha: 0.55 });
+          carried.addChild(disc, sp);
+        });
+      }
 
       const label = !product && !own && shortLabel(def);
       if (label) {

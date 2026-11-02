@@ -43,6 +43,7 @@ import { computeUnlocks, entityUnlocked, recipeUnlocked } from './unlocks';
 import type { SearchHit } from './search';
 import { buildBadges, buildViewOverlay, type ViewMode } from './views';
 import { GridRenderer } from './renderer';
+import { entityContents } from './contents';
 import { checkLayoutRails, type RailCheck } from './railCheck';
 import { planRail, railFromPiece, railStartAt, signalAt, trainStopAt } from './rails';
 import { newId as railId } from './model';
@@ -141,12 +142,14 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
   const [message, setMessage] = useState<string>('');
   const [view, setView] = useState<ViewMode>('normal');
   const [showWires, setShowWires] = useState(() => readPref('wires', true));
+  const [showContents, setShowContents] = useState(() => readPref('contents', true));
   const [showCoverage, setShowCoverage] = useState(() => readPref('coverage', false));
   const [bpDialog, setBpDialog] = useState<BlueprintDialogMode | null>(null);
   const [designs, setDesigns] = useState<Design[]>(() => loadDesigns());
   const [libraryOpen, setLibraryOpen] = useState(false);
   useEffect(() => saveDesigns(designs), [designs]);
   useEffect(() => writePref('wires', showWires), [showWires]);
+  useEffect(() => writePref('contents', showContents), [showContents]);
   useEffect(() => writePref('coverage', showCoverage), [showCoverage]);
   const [showRobots, setShowRobots] = useState(() => readPref('robots', true));
   useEffect(() => writePref('robots', showRobots), [showRobots]);
@@ -237,6 +240,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
     return () => clearTimeout(t);
   }, [layout, research]);
   useEffect(() => rendererRef.current?.setBadges(buildBadges(view, layout.entities, rates, sim)), [view, layout.entities, rates, sim]);
+  useEffect(() => rendererRef.current?.setContents(showContents ? entityContents(layout.entities, sim) : {}), [layout.entities, sim, showContents]);
   // While a pole is in hand (or one is selected) show supply areas and the wires it would make.
   const polePreview = useMemo(() => {
     if (tool.kind === 'build' && ENTITIES[tool.name]?.kind === 'pole' && cursor) {
@@ -646,6 +650,8 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
         setView((v) => VIEW_ORDER[(VIEW_ORDER.indexOf(v) + 1) % VIEW_ORDER.length]);
       } else if (k === 'l' && !ev.ctrlKey && !ev.metaKey) {
         setShowWires((v) => !v);
+      } else if (k === 'i' && !ev.ctrlKey && !ev.metaKey) {
+        setShowContents((v) => !v);
       } else if (k === 'c' && !ev.ctrlKey && !ev.metaKey) {
         setShowCoverage((v) => !v);
       } else if (k === 'o' && !ev.ctrlKey && !ev.metaKey) {
@@ -828,6 +834,9 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
               </button>
             ))}
           </span>
+          <label className="toggle" title="Show what belts, inserters and chests carry, like the game's alt-mode (needs game icons; I)">
+            <input type="checkbox" checked={showContents} onChange={(e) => setShowContents(e.target.checked)} /> Contents
+          </label>
           <label className="toggle" title="Show copper wires between electric poles (L)">
             <input type="checkbox" checked={showWires} onChange={(e) => setShowWires(e.target.checked)} /> Wires
           </label>
@@ -864,7 +873,7 @@ export function LayoutEditor({ onLayoutChange, research = UNLOCK_ALL }: LayoutEd
             {robots.roboports.length > 0 && ` · ${robots.roboports.length} roboports in ${robots.networks.length} network${robots.networks.length === 1 ? '' : 's'}`}
           </span>
           <span className="msg">{message}</span>
-          <span className="hint">/ search · V view · O roboports · drag to select · Ctrl+C/V copy · R rotate · Q pick · right-click remove · Space-drag pan</span>
+          <span className="hint">/ search · V view · O roboports · I contents · drag to select · Ctrl+C/V copy · R rotate · Q pick · right-click remove · Space-drag pan</span>
         </div>
       </div>
 
