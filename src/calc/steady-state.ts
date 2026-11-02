@@ -59,6 +59,8 @@ export interface TransportState {
   lanes?: { left: Flow[]; right: Flow[] };
   /** Electric inserters: share of full speed their power network gives (0 when no pole reaches them). Absent at full power. */
   powerShare?: number;
+  /** Electric inserters: power drawn at the rate found, drain included, in W. */
+  powerW?: number;
 }
 
 export interface PowerState {
@@ -583,7 +585,8 @@ export function simulateLayout(
       to = `${drop.node}:${near ? otherLane(near) : 'R'}`;
     }
     for (const from of froms) edges.push({ id: `ins:${q.p.id}:${from}`, from, to, capRow, accept, reject, report: q.p.id });
-    if (q.e.energySource === 'electric') electricInserters.push({ q, capRow, capacity });
+    if (q.e.energySource === 'electric')
+      electricInserters.push({ q, capRow, capacity, jPerItem: (q.e.energyPerRotation ?? 0) / inserterHandSize(q.e, bonuses), drainW: q.e.drain ?? 0 });
   }
 
   // --- Drills drop onto the tile in front ---------------------------------
@@ -707,6 +710,36 @@ export function simulateLayout(
       flowVars.push({ name, edge: e, item });
     }
   }
+  // Inserters draw power for every swing, plus their drain.
+  const inserterNet = new Map<string, { net: string; link: PoweredLink }>();
+  for (const [net, links] of insertersOn) for (const link of links) inserterNet.set(link.q.p.id, { net, link });
+  const inserterFlows = new Map<string, { name: string; j: number }[]>();
+  for (const fv of flowVars) {
+    const on = fv.edge.id.startsWith('ins:') && fv.edge.report ? inserterNet.get(fv.edge.report) : undefined;
+    if (!on) continue;
+    coef(variables[fv.name] as Record<string, number>, `pow:${on.net}`, -on.link.jPerItem);
+    let l = inserterFlows.get(on.net);
+    if (!l) inserterFlows.set(on.net, (l = []));
+    l.push({ name: fv.name, j: on.link.jPerItem });
+  }
+  const drainOf = new Map<string, number>();
+  for (const [net, links] of insertersOn) {
+    const w = links.reduce((a, l) => a + l.drainW, 0);
+    if (w <= 0) continue;
+    drainOf.set(net, w);
+    const v: Record<string, number> = { obj: 1e-6 };
+    coef(v, `pow:${net}`, -1);
+    coef(v, `cap:drain:${net}`, 1);
+    constraints[`cap:drain:${net}`] = { max: w };
+    variables[`drain:${net}`] = v;
+  }
+  /** Power the inserters on a network draw at these values, in W. */
+  const inserterDemand = (vals: Map<string, number>, net: string) => {
+    let w = vals.get(`drain:${net}`) ?? 0;
+    for (const f of inserterFlows.get(net) ?? []) w += (vals.get(f.name) ?? 0) * f.j;
+    return w;
+  };
+
   // Supplies and sinks.
   for (const [node, item] of supplies) {
     const v: Record<string, number> = {};
@@ -784,7 +817,7 @@ export function simulateLayout(
   // share (satisfaction), so they all slow down alike, rather than the LP
   // feeding some fully and starving others.
   if (solution.status === 'optimal' && powerNets.modelled) {
-    const shares = evenPowerShares(solution.variables, machines, powerNets.nets, insertersOn, constraints, variables);
+    const shares = evenPowerShares(solution.variables, machines, powerNets.nets, insertersOn, inserterDemand, constraints, variables);
     if (shares.size) {
       applyPowerShares(shares, machines, insertersOn, constraints);
       for (const [net, s] of shares) for (const link of insertersOn.get(net) ?? []) {
@@ -855,6 +888,9 @@ export function simulateLayout(
         power.capacityW += -m.rate.powerW;
       } else if (m.electric) demand += m.rate.powerW * u;
     }
+    const ins = inserterDemand(values, net);
+    demand += ins;
+    power.demandW += ins;
     power.supplyW += supply;
     if (powerNets.modelled && demand > 0 && supply - demand < 1e-6 * Math.max(1, demand)) tightNets.add(net);
   }
@@ -908,6 +944,8 @@ export function simulateLayout(
       t.items = asFlows(itemTotals.get(id));
       t.perSecond = total(t.items);
       t.utilization = t.capacity > 0 ? t.perSecond / t.capacity : 0;
+      const on = inserterNet.get(id);
+      if (on) t.powerW = t.perSecond * on.link.jPerItem + on.link.drainW;
       continue;
     }
     const base = t.kind === 'splitter' ? `s:${id}` : `b:${id}`;
@@ -1048,6 +1086,9 @@ interface PoweredLink {
   q: Placed;
   capRow: string;
   capacity: number;
+  /** Energy per item moved: one full arm turn per swing, shared by a hand's worth of items. */
+  jPerItem: number;
+  drainW: number;
 }
 
 /** Caps every electric machine and inserter on each short network at its share of full speed. */
@@ -1077,12 +1118,14 @@ function evenPowerShares(
   machines: Map<string, MachineInfo>,
   nets: string[],
   insertersOn: Map<string, PoweredLink[]>,
+  inserterDemand: (vals: Map<string, number>, net: string) => number,
   constraints: Record<string, Constraint>,
   variables: Record<string, Coefficients>,
 ): Map<string, number> {
   const at = (vals: Map<string, number>, id: string) => vals.get(`u:${id}`) ?? 0;
   const consumersOf = (net: string) => [...machines.values()].filter((m) => m.electric && m.powerNet === net && m.rate.powerW > 0);
-  const demand = (vals: Map<string, number>, net: string) => consumersOf(net).reduce((a, m) => a + m.rate.powerW * at(vals, m.q.p.id), 0);
+  const demand = (vals: Map<string, number>, net: string) =>
+    consumersOf(net).reduce((a, m) => a + m.rate.powerW * at(vals, m.q.p.id), 0) + inserterDemand(vals, net);
   const firstVals = new Map(first);
   const supply = new Map<string, number>();
   for (const net of nets) {

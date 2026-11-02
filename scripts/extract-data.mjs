@@ -226,6 +226,8 @@ for (const [type, group] of Object.entries(raw)) {
         break;
       case 'inserter':
         e.rotationSpeed = p.rotation_speed;
+        e.energyPerRotation = energy(p.energy_per_rotation);
+        e.energyPerMovement = energy(p.energy_per_movement);
         if (p.bulk) e.inserterStackSize = 'bulk';
         break;
       case 'pipe-to-ground': {

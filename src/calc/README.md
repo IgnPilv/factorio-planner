@@ -88,7 +88,10 @@ splitter and chest, and nothing moves faster than its limit.
   equals the generation available. Electric inserters share it too: on a short
   network their capacity is scaled by s (`powerShare` on their transport
   state), and one no pole reaches moves nothing (`powerShare` 0, listed as an
-  `unpowered` bottleneck). Inserter energy use itself is not counted in demand.
+  `unpowered` bottleneck). Inserters also draw power: one full arm turn
+  (`energy_per_rotation`) per swing, a swing carrying a full hand, plus their
+  drain (`powerW` on their transport state). Arm extension energy is left out;
+  it is small for the usual pickup and drop distances.
   Power-plant parts only run as hard as demand needs.
 - **Chests** absorb whatever reaches them; a chest whose `recipe` names an
   item is an unlimited supply of it. Labs absorb science packs.

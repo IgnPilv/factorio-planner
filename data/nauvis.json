@@ -9426,6 +9426,8 @@
    "energySource": "electric",
    "drain": 1000,
    "rotationSpeed": 0.04,
+   "energyPerRotation": 20000,
+   "energyPerMovement": 20000,
    "bulk": true
   },
   "burner-inserter": {
@@ -9439,7 +9441,9 @@
    "icon": "__base__/graphics/icons/burner-inserter.png",
    "wikiUrl": "https://wiki.factorio.com/Burner_inserter",
    "energySource": "burner",
-   "rotationSpeed": 0.013
+   "rotationSpeed": 0.013,
+   "energyPerRotation": 50000,
+   "energyPerMovement": 50000
   },
   "burner-mining-drill": {
    "name": "burner-mining-drill",
@@ -9659,7 +9663,9 @@
    "wikiUrl": "https://wiki.factorio.com/Fast_inserter",
    "energySource": "electric",
    "drain": 500,
-   "rotationSpeed": 0.04
+   "rotationSpeed": 0.04,
+   "energyPerRotation": 7000,
+   "energyPerMovement": 7000
   },
   "fast-splitter": {
    "name": "fast-splitter",
@@ -9770,7 +9776,9 @@
    "wikiUrl": "https://wiki.factorio.com/Inserter",
    "energySource": "electric",
    "drain": 400,
-   "rotationSpeed": 0.014
+   "rotationSpeed": 0.014,
+   "energyPerRotation": 5000,
+   "energyPerMovement": 5000
   },
   "iron-chest": {
    "name": "iron-chest",
@@ -9853,7 +9861,9 @@
    "wikiUrl": "https://wiki.factorio.com/Long_handed_inserter",
    "energySource": "electric",
    "drain": 400,
-   "rotationSpeed": 0.02
+   "rotationSpeed": 0.02,
+   "energyPerRotation": 5000,
+   "energyPerMovement": 5000
   },
   "medium-electric-pole": {
    "name": "medium-electric-pole",

@@ -5,12 +5,14 @@ import { gameData as data } from '../src/data';
 import {
   allResearched,
   inserterCapacity,
+  inserterHandSize,
   inserterThroughput,
   inserterTicksPerTurn,
   researchBonuses,
   simulateLayout,
   type Flow,
   type PlacedEntity,
+  type SteadyStateResult,
 } from '../src/calc';
 
 type Dir = 0 | 1 | 2 | 3;
@@ -24,6 +26,7 @@ const e = (name: string, x: number, y: number, direction: Dir = 0, extra: Partia
   ...extra,
 });
 const flow = (flows: Flow[], name: string) => flows.find((f) => f.name === name)?.perSecond ?? 0;
+const inserterPower = (r: SteadyStateResult) => Object.values(r.transport).reduce((a, t) => a + (t.powerW ?? 0), 0);
 const N = 0, E = 1, S = 2;
 
 describe('inserter throughput (wiki chest-to-chest figures)', () => {
@@ -231,7 +234,14 @@ describe('simulateLayout', () => {
     expect(r.ok).toBe(true);
     expect(r.power.modelled).toBe(true);
     for (const id of ['asm0', 'asm1']) expect(r.entities[id]!.status).toBe('working');
-    const demand = 2 * 155e3;
+    // Two assembler 2s plus what the inserters draw: a full arm turn per swing, and drain.
+    const inserters = Object.values(r.transport).filter((t) => t.kind === 'inserter');
+    const inserterW = inserters.reduce((a, t) => a + (t.powerW ?? 0), 0);
+    const bonuses = researchBonuses(data, allResearched(data));
+    const out = r.transport[ents.find((x) => x.name === 'fast-inserter')!.id]!;
+    expect(out.powerW).toBeCloseTo((out.perSecond * 7000) / inserterHandSize(data.entities['fast-inserter']!, bonuses) + 500, 3);
+    expect(inserterW).toBeGreaterThan(5e3);
+    const demand = 2 * 155e3 + inserterW;
     expect(r.power.demandW).toBeCloseTo(demand, -2);
     expect(r.entities.engine!.activity).toBeCloseTo(demand / 900e3, 3);
     expect(r.entities.boiler!.activity).toBeCloseTo(demand / 1.8e6, 3);
@@ -305,7 +315,11 @@ describe('simulateLayout', () => {
     ];
     const r = simulateLayout({ entities: ents }, data);
     expect(r.entities.asm!.status).toBe('low-power');
-    expect(r.entities.asm!.activity).toBeCloseTo(42e3 / 155e3, 3);
+    // The assembler and its two fast inserters split the 42 kW.
+    expect(r.power.demandW).toBeCloseTo(42e3, -1);
+    expect(r.entities.asm!.rate.powerW + inserterPower(r)).toBeCloseTo(42e3, -1);
+    expect(r.entities.asm!.activity).toBeLessThan(42e3 / 155e3);
+    expect(r.entities.asm!.activity).toBeGreaterThan(0.2);
   });
 
   it('short power is shared evenly: every machine slows by the same fraction', () => {
@@ -327,7 +341,7 @@ describe('simulateLayout', () => {
     expect(b.status).toBe('low-power');
     expect(a.activity).toBeCloseTo(b.activity, 4);
     expect(r.power.demandW).toBeCloseTo(42e3, -1);
-    expect(a.activity).toBeCloseTo(42e3 / (2 * a.rate.powerW / a.activity), 3);
+    expect(a.rate.powerW + b.rate.powerW + inserterPower(r)).toBeCloseTo(42e3, -1);
   });
 
   it('machines outside every pole are unpowered', () => {
@@ -366,6 +380,20 @@ describe('simulateLayout', () => {
     expect(burner.transport.ins!.powerShare).toBeUndefined();
   });
 
+  it('an inserter draws one arm turn of energy per swing, plus drain', () => {
+    // Basic inserter chest to chest: 60/70 swings/s × 5 kJ + 0.4 kW drain ≈ 4.7 kW.
+    const ents = [
+      e('solar-panel', 0, 0, N),
+      e('wooden-chest', 4, 1, N, { recipe: 'iron-plate' }),
+      e('inserter', 5, 1, E, { id: 'ins' }),
+      e('wooden-chest', 6, 1, N),
+    ];
+    const r = simulateLayout({ entities: ents }, data);
+    expect(r.transport.ins!.perSecond).toBeCloseTo(60 / 70, 3);
+    expect(r.transport.ins!.powerW).toBeCloseTo((60 / 70) * 5000 + 400, 1);
+    expect(r.power.demandW).toBeCloseTo((60 / 70) * 5000 + 400, 1);
+  });
+
   it('inserters on a short network slow down with its machines', () => {
     // One solar panel (42 kW average) for an assembler 2 (155 kW) on gears.
     const ents = [
@@ -378,7 +406,7 @@ describe('simulateLayout', () => {
     ];
     const r = simulateLayout({ entities: ents }, data);
     const share = r.entities.asm!.activity;
-    expect(share).toBeCloseTo(42e3 / 155e3, 3);
+    expect(r.power.demandW).toBeCloseTo(42e3, -1);
     const full = inserterCapacity(data.entities['fast-inserter']!, undefined, { e: data.entities['wooden-chest']! }, { e: data.entities['assembling-machine-2']! });
     // The slowed input inserter now limits the assembler a little below the
     // network's share, so the share settles where demand meets supply.
