@@ -215,6 +215,22 @@ type NodeId = string;
 const EXIT = 'exit';
 /** Objective value of one item per second leaving the layout (machine activity counts 1). */
 const OUTPUT_WEIGHT = 1e-2;
+/**
+ * Objective value of one item per second on a splitter's priority side. Below
+ * OUTPUT_WEIGHT (priority never costs output) and well above the 1e-6 per edge
+ * flow cost, so the priority side is filled first.
+ */
+const PRIORITY_WEIGHT = 1e-3;
+
+const allows = (e: Edge, item: string) => (!e.accept || e.accept.has(item)) && !e.reject?.has(item);
+
+/** Which side of a splitter (facing d) a tile is on, seen facing the way items travel. */
+function splitterSide(q: Placed, x: number, y: number): 'left' | 'right' {
+  const lx = DX[(q.d + 3) % 4]!;
+  const ly = DY[(q.d + 3) % 4]!;
+  const tiles = tilesOf(q).map(([tx, ty]) => tx * lx + ty * ly);
+  return x * lx + y * ly === Math.max(...tiles) ? 'left' : 'right';
+}
 
 interface Edge {
   id: string;
@@ -224,6 +240,10 @@ interface Edge {
   capRow?: string;
   /** Items allowed through; undefined = anything. */
   accept?: Set<string>;
+  /** Items never allowed through (deny-list filters, a splitter's non-filter side). */
+  reject?: Set<string>;
+  /** Splitter side this edge leaves from or enters by. */
+  split?: { splitter: string; dir: 'in' | 'out'; side: 'left' | 'right' };
   /** Report this edge's flow under this transport entity id. */
   report?: string;
 }
@@ -398,15 +418,16 @@ export function simulateLayout(
       if (t.d === d) to = `s:${t.p.id}`;
     }
     if (!to) return; // dead end: items stop here
+    const split = k === 'splitter' ? { splitter: t.p.id, dir: 'in' as const, side: splitterSide(t, tx, ty) } : undefined;
     if (laneLimit) {
       const lane = `cap:lane:${srcId}:${x},${y}`;
       capacities.set(lane, Math.min(laneThroughput(src.e), laneThroughput(t.e)));
       // One lane only; that is also below the source belt's own limit.
-      edges.push({ id: `${srcId}>${to}@${x},${y}#lane`, from, to, capRow: lane, report: srcId });
+      edges.push({ id: `${srcId}>${to}@${x},${y}#lane`, from, to, capRow: lane, report: srcId, split });
       return;
     }
     capacities.set(capRow, cap);
-    edges.push({ id: `${srcId}>${to}@${x},${y}`, from, to, capRow, report: srcId });
+    edges.push({ id: `${srcId}>${to}@${x},${y}`, from, to, capRow, report: srcId, split });
   };
 
   for (const q of placed) {
@@ -426,7 +447,21 @@ export function simulateLayout(
       }
     } else if (k === 'splitter') {
       transport[q.p.id] = blankTransport('splitter', 2 * beltCap(q));
-      for (const [x, y] of tilesOf(q)) linkForward(q.p.id, `s:${q.p.id}`, x, y, q.d, beltCap(q), q);
+      // A filter sends its item only to the priority side and everything else
+      // only to the other side (2.0: the filter needs an output priority).
+      const filter = q.p.outputPriority ? q.p.filters?.[0] : undefined;
+      for (const [x, y] of tilesOf(q)) {
+        const before = edges.length;
+        linkForward(q.p.id, `s:${q.p.id}`, x, y, q.d, beltCap(q), q);
+        const side = splitterSide(q, x, y);
+        for (const e of edges.slice(before)) {
+          e.split = { splitter: q.p.id, dir: 'out', side };
+          if (filter) {
+            if (side === q.p.outputPriority) e.accept = new Set([filter]);
+            else e.reject = new Set([filter]);
+          }
+        }
+      }
     }
   }
 
@@ -444,7 +479,12 @@ export function simulateLayout(
     let accept: Set<string> | undefined;
     if (drop.node.startsWith('m:')) accept = machineAccepts(drop.q.p.id);
     else if (sinkAccept.has(drop.node)) accept = sinkAccept.get(drop.node);
-    edges.push({ id: `ins:${q.p.id}`, from: pick.node, to: drop.node, capRow, accept, report: q.p.id });
+    // Filter inserters: an allow list narrows what moves, a deny list blocks items.
+    const filters = q.p.filters?.filter(Boolean) ?? [];
+    let reject: Set<string> | undefined;
+    if (filters.length && q.p.filterMode === 'blacklist') reject = new Set(filters);
+    else if (filters.length) accept = new Set(accept ? filters.filter((f) => accept!.has(f)) : filters);
+    edges.push({ id: `ins:${q.p.id}`, from: pick.node, to: drop.node, capRow, accept, reject, report: q.p.id });
   }
 
   // --- Drills drop onto the tile in front ---------------------------------
@@ -481,7 +521,7 @@ export function simulateLayout(
       const src = reach.get(e.from);
       if (!src) continue;
       for (const item of src) {
-        if (e.accept && !e.accept.has(item)) continue;
+        if (!allows(e, item)) continue;
         if (e.from.startsWith('m:') && !machines.get(e.from.slice(2))?.itemOut.has(item)) continue;
         if (addReach(e.to, item)) changed = true;
       }
@@ -499,17 +539,24 @@ export function simulateLayout(
   };
 
   // Flow variables.
+  const byId = new Map(placed.map((q) => [q.p.id, q]));
+  /** The side a splitter prefers in this direction, if set. */
+  const splitPriority = (sp: NonNullable<Edge['split']>) => {
+    const p = byId.get(sp.splitter)?.p;
+    return sp.dir === 'in' ? p?.inputPriority : p?.outputPriority;
+  };
   const flowVars: { name: string; edge: Edge; item: string }[] = [];
   for (const e of edges) {
     const items = reach.get(e.from);
     if (!items) continue;
     for (const item of items) {
-      if (e.accept && !e.accept.has(item)) continue;
+      if (!allows(e, item)) continue;
       if (e.from.startsWith('m:') && !machines.get(e.from.slice(2))?.itemOut.has(item)) continue;
       const name = `x:${e.id}:${item}`;
       // Items leaving the layout count towards the objective, so supply chests
       // and drills push as much as the build can carry.
       const v: Record<string, number> = { obj: e.to === EXIT ? OUTPUT_WEIGHT : -1e-6 };
+      if (e.split && splitPriority(e.split) === e.split.side) v.obj! += PRIORITY_WEIGHT;
       coef(v, balance(e.from, item), -1);
       if (e.to !== EXIT) coef(v, balance(e.to, item), 1);
       if (e.capRow) coef(v, e.capRow, 1);
@@ -613,7 +660,14 @@ export function simulateLayout(
   // pick the one where splitters split (and draw from their two inputs) as
   // evenly as possible. That is the game's rule: half each way, with the
   // overflow going to the other side only when one side can't take more.
-  const balanced = balanceSplitters(placed, flowVars, variables, constraints, solution.result);
+  // Splitters with a priority (or a filter, which needs one) on a side are not
+  // balanced on that side: the LP already filled the priority side first.
+  const balanced = balanceSplitters(
+    flowVars.filter((fv) => !fv.edge.split || !splitPriority(fv.edge.split)),
+    variables,
+    constraints,
+    values,
+  );
   if (balanced) values = balanced;
 
   // --- Results -------------------------------------------------------------
@@ -706,15 +760,12 @@ export function simulateLayout(
 }
 
 function balanceSplitters(
-  placed: Placed[],
   flowVars: { name: string; edge: Edge; item: string }[],
   variables: Record<string, Coefficients>,
   constraints: Record<string, Constraint>,
-  best: number,
+  solved: Map<string, number>,
 ): Map<string, number> | undefined {
-  const sides = new Map<string, Map<string, string[]>>(); // row group -> side tile -> flow vars
-  const splitterIds = new Set(placed.filter((q) => q.e.kind === 'splitter').map((q) => q.p.id));
-  if (splitterIds.size === 0) return undefined;
+  const sides = new Map<string, Map<string, string[]>>(); // row group -> side -> flow vars
   const add = (group: string, side: string, name: string) => {
     let g = sides.get(group);
     if (!g) sides.set(group, (g = new Map()));
@@ -723,15 +774,21 @@ function balanceSplitters(
     l.push(name);
   };
   for (const fv of flowVars) {
-    const at = fv.edge.id.split('@')[1]?.split('#')[0];
-    if (fv.edge.from.startsWith('s:') && splitterIds.has(fv.edge.from.slice(2)) && at) add(`out:${fv.edge.from}`, at, fv.name);
-    if (fv.edge.to.startsWith('s:') && splitterIds.has(fv.edge.to.slice(2))) add(`in:${fv.edge.to}`, fv.edge.from, fv.name);
+    const sp = fv.edge.split;
+    if (sp) add(`${sp.dir}:${sp.splitter}`, sp.side, fv.name);
   }
+  if (sides.size === 0) return undefined;
   const vars: Record<string, Record<string, number>> = {};
+  let best = 0;
   for (const [name, c] of Object.entries(variables)) {
     const copy: Record<string, number> = { ...(c as Record<string, number>) };
     const o = copy.obj ?? 0;
-    if (o !== 0) copy.objfix = o;
+    // Keep what the first solve achieved (machines, outputs, priorities), but
+    // not the tiny per-edge flow cost: an even split may use a longer path.
+    if (Math.abs(o) > 1e-5) {
+      copy.objfix = o;
+      best += o * (solved.get(name) ?? 0);
+    }
     delete copy.obj;
     vars[name] = copy;
   }
@@ -776,7 +833,7 @@ function scaleRate(r: EntityRate, u: number): EntityRate {
 }
 
 function hasInflow(edges: Edge[], node: NodeId, item: string, reach: Map<NodeId, Set<string>>): boolean {
-  return edges.some((e) => e.to === node && (!e.accept || e.accept.has(item)) && (reach.get(e.from)?.has(item) ?? false));
+  return edges.some((e) => e.to === node && allows(e, item) && (reach.get(e.from)?.has(item) ?? false));
 }
 
 // ---------------------------------------------------------------------------
