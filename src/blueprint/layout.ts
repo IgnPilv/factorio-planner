@@ -245,6 +245,22 @@ function pipeToGroundDirections(entities: readonly PlacedEntity[]): Map<string, 
 
 // ---- import --------------------------------------------------------------
 
+/**
+ * Buildings renamed in 2.0. Only applied to pre-2.0 blueprints: "stack-inserter"
+ * is a different (Space Age) building in 2.0. Filter inserters became the
+ * filter setting on ordinary inserters.
+ */
+const LEGACY_NAMES: Record<string, string> = {
+  'logistic-chest-active-provider': 'active-provider-chest',
+  'logistic-chest-passive-provider': 'passive-provider-chest',
+  'logistic-chest-storage': 'storage-chest',
+  'logistic-chest-buffer': 'buffer-chest',
+  'logistic-chest-requester': 'requester-chest',
+  'filter-inserter': 'fast-inserter',
+  'stack-inserter': 'bulk-inserter',
+  'stack-filter-inserter': 'bulk-inserter',
+};
+
 export interface ImportResult {
   clipboard: Clipboard | null;
   /** Entity names the planner doesn't have (count per name). */
@@ -258,7 +274,8 @@ export function blueprintToClipboard(bp: Blueprint): ImportResult {
   // 1.1 and older use 8-way directions; 2.0 (internally 1.2 while in development) uses 16-way.
   const legacy = (bp.version ?? 0) < encodeVersion(1, 2);
   const placed: Omit<PlacedEntity, 'id'>[] = [];
-  for (const be of bp.entities ?? []) {
+  for (const orig of bp.entities ?? []) {
+    const be = legacy && LEGACY_NAMES[orig.name] ? { ...orig, name: LEGACY_NAMES[orig.name]! } : orig;
     const def = ENTITIES[be.name];
     if (!def) {
       unknown[be.name] = (unknown[be.name] ?? 0) + 1;

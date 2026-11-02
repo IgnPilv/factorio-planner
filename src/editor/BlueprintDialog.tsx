@@ -80,11 +80,13 @@ function ImportPane({ initial, onClose, onImport }: { initial?: string; onClose:
     try {
       const { clipboard, unknown, label } = blueprintToClipboard(decodeBlueprintString(value));
       const missing = Object.entries(unknown).map(([n, c]) => `${c} × ${n}`);
+      const rails = Object.keys(unknown).some((n) => /rail|locomotive|wagon|train-stop/.test(n));
+      const railNote = rails ? ' Rails and trains are not in the layout editor yet; the City blocks tab builds rail grids.' : '';
       if (!clipboard) {
-        setError(missing.length ? `Nothing the planner knows in this blueprint (${missing.join(', ')}).` : 'This blueprint has no buildings.');
+        setError(missing.length ? `Nothing the planner knows in this blueprint (${missing.join(', ')}).${railNote}` : 'This blueprint has no buildings.');
         return;
       }
-      const note = `${label ? `"${label}": ` : ''}${clipboard.entities.length} buildings${missing.length ? `, skipped ${missing.join(', ')}` : ''}`;
+      const note = `${label ? `"${label}": ` : ''}${clipboard.entities.length} buildings${missing.length ? `, skipped ${missing.join(', ')}` : ''}${railNote}`;
       onImport(clipboard, note);
     } catch (err) {
       setError((err as Error).message);

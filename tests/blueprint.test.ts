@@ -197,12 +197,26 @@ describe('blueprint import', () => {
       entities: [
         { entity_number: 1, name: 'transport-belt', position: { x: 0.5, y: 0.5 }, direction: 2 },
         { entity_number: 2, name: 'assembling-machine-2', position: { x: 2.5, y: 1.5 }, items: { 'speed-module': 2 } },
-        { entity_number: 3, name: 'filter-inserter', position: { x: 5.5, y: 0.5 } },
+        { entity_number: 3, name: 'filter-inserter', position: { x: 5.5, y: 0.5 }, direction: 2, filters: [{ index: 1, name: 'coal' }] },
+        { entity_number: 4, name: 'logistic-chest-requester', position: { x: 6.5, y: 0.5 } },
+        { entity_number: 5, name: 'straight-rail', position: { x: 9, y: 1 } },
       ],
     });
     expect(clipboard!.entities[0]!.direction).toBe(1);
     expect(clipboard!.entities[1]!.modules).toEqual(['speed-module', 'speed-module']);
-    expect(clipboard!.entities).toHaveLength(2);
+    // renamed in 2.0; 1.1 inserters also face their pickup side
+    expect(clipboard!.entities[2]).toMatchObject({ name: 'fast-inserter', direction: 3, filters: ['coal'] });
+    expect(clipboard!.entities[3]!.name).toBe('requester-chest');
+    expect(clipboard!.entities).toHaveLength(4);
+  });
+
+  it('keeps 2.0 names as they are', () => {
+    const { unknown } = blueprintToClipboard({
+      item: 'blueprint',
+      version: BLUEPRINT_VERSION,
+      entities: [{ entity_number: 1, name: 'stack-inserter', position: { x: 0.5, y: 0.5 } }],
+    });
+    expect(unknown).toEqual({ 'stack-inserter': 1 });
   });
 
   it('pastes into a layout', () => {
