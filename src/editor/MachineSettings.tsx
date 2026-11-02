@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { gameData } from '../data';
 import type { Entity, Module, Recipe } from '../data/types';
 import type { PlacedEntity } from './model';
+import { ALL_UNLOCKED, itemUnlocked, recipeUnlocked, type Unlocks } from './unlocks';
 
 /** Recipes a crafting machine can make, sorted by display name. */
 export function recipesFor(ent: Entity): Recipe[] {
@@ -37,15 +38,27 @@ export function modulesFor(ent: Entity, recipe?: string): Module[] {
   });
 }
 
-export function MachineSettings({ entity, def, onChange }: { entity: PlacedEntity; def: Entity; onChange: (patch: Partial<PlacedEntity>) => void }) {
+export function MachineSettings({
+  entity,
+  def,
+  onChange,
+  unlocks = ALL_UNLOCKED,
+}: {
+  entity: PlacedEntity;
+  def: Entity;
+  onChange: (patch: Partial<PlacedEntity>) => void;
+  unlocks?: Unlocks;
+}) {
   const recipes = recipesFor(def);
+  const current = entity.modules ?? [];
   const resources = resourcesFor(def);
   const slots = def.moduleSlots ?? 0;
-  const modules = modulesFor(def, entity.recipe);
-  const current = entity.modules ?? [];
+  const modules = modulesFor(def, entity.recipe).filter((m) => itemUnlocked(unlocks, m.name) || current.includes(m.name));
   const [filter, setFilter] = useState('');
   const f = filter.trim().toLowerCase();
   const shown = f ? recipes.filter((r) => r.displayName.toLowerCase().includes(f) || r.name === entity.recipe) : recipes;
+  const open = shown.filter((r) => recipeUnlocked(unlocks, r.name));
+  const locked = shown.filter((r) => !recipeUnlocked(unlocks, r.name));
 
   const setModule = (i: number, name: string) => {
     const next = Array.from({ length: slots }, (_, k) => current[k] ?? '');
@@ -63,9 +76,16 @@ export function MachineSettings({ entity, def, onChange }: { entity: PlacedEntit
           )}
           <select value={entity.recipe ?? ''} onChange={(e) => onChange({ recipe: e.target.value || undefined })}>
             <option value="">(none)</option>
-            {shown.map((r) => (
+            {open.map((r) => (
               <option key={r.name} value={r.name}>{r.displayName}</option>
             ))}
+            {locked.length > 0 && (
+              <optgroup label="Not researched yet">
+                {locked.map((r) => (
+                  <option key={r.name} value={r.name} disabled={r.name !== entity.recipe}>{r.displayName}</option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </label>
       )}
