@@ -31,6 +31,7 @@ import { computeLayoutRates, simulateLayout, type SteadyStateResult } from '../c
 import { gameData } from '../data';
 import { FlowState, MachineRates, PowerSummary, ProductionSummary, QuickSearch, SimSummary } from './Panels';
 import { analysePower, poleInfo } from './power';
+import { analyseRobots, isRoboportName, nodeOf, robotOverlay } from './robots';
 import type { SearchHit } from './search';
 import { buildBadges, buildViewOverlay, type ViewMode } from './views';
 import { GridRenderer } from './renderer';
@@ -117,6 +118,8 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
   const [showCoverage, setShowCoverage] = useState(() => readPref('coverage', false));
   useEffect(() => writePref('wires', showWires), [showWires]);
   useEffect(() => writePref('coverage', showCoverage), [showCoverage]);
+  const [showRobots, setShowRobots] = useState(() => readPref('robots', true));
+  useEffect(() => writePref('robots', showRobots), [showRobots]);
 
   // Undo/redo history of whole layouts (cheap: arrays are shared structurally).
   const past = useRef<Layout[]>([]);
@@ -213,10 +216,29 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
     return null;
   }, [tool, cursor, direction, layout, selected]);
   const showPoleAreas = showCoverage || polePreview !== null;
-  useEffect(
-    () => rendererRef.current?.setView(buildViewOverlay(view, layout.entities, power, { polePreview, showPoleAreas, showWires, sim })),
-    [view, layout.entities, power, polePreview, showPoleAreas, showWires, sim],
-  );
+  const robots = useMemo(() => analyseRobots(layout.entities), [layout.entities]);
+  // Same for a roboport in hand or selected: its zones and the roboports it would join.
+  const robotPreview = useMemo(() => {
+    if (tool.kind === 'build' && isRoboportName(tool.name) && cursor) {
+      const p = resolvePlacement(layout, tool.name, direction, cursor[0], cursor[1]);
+      return nodeOf({ id: '__ghost', name: tool.name, ...p });
+    }
+    if (selected) {
+      const e = layout.entities.find((x) => x.id === selected);
+      if (e && isRoboportName(e.name)) return nodeOf(e);
+    }
+    return null;
+  }, [tool, cursor, direction, layout, selected]);
+  useEffect(() => {
+    const overlay = buildViewOverlay(view, layout.entities, power, { polePreview, showPoleAreas, showWires, sim });
+    if (showRobots || robotPreview) {
+      const r = robotOverlay(robots, robotPreview);
+      overlay.areas = [...(r.areas ?? []), ...(overlay.areas ?? [])];
+      overlay.lines = [...(overlay.lines ?? []), ...(r.lines ?? [])];
+      overlay.dots = [...(overlay.dots ?? []), ...(r.dots ?? [])];
+    }
+    rendererRef.current?.setView(overlay);
+  }, [view, layout.entities, power, polePreview, showPoleAreas, showWires, sim, robots, robotPreview, showRobots]);
   useEffect(() => setMessage(''), [tool]);
 
   // ---- ghost preview -------------------------------------------------------
@@ -525,6 +547,8 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
         setShowWires((v) => !v);
       } else if (k === 'c' && !ev.ctrlKey && !ev.metaKey) {
         setShowCoverage((v) => !v);
+      } else if (k === 'o' && !ev.ctrlKey && !ev.metaKey) {
+        setShowRobots((v) => !v);
       } else if (k === 'w' && !ev.ctrlKey) setTool({ kind: 'water' });
       else if (k === 'e' && !ev.ctrlKey) setTool({ kind: 'erase' });
       else if (k === '[' || k === '-') setBrush((b) => Math.max(1, b - 1));
@@ -665,6 +689,9 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
           <label className="toggle" title="Show the area each electric pole powers (C)">
             <input type="checkbox" checked={showCoverage} onChange={(e) => setShowCoverage(e.target.checked)} /> Coverage
           </label>
+          <label className="toggle" title="Show roboport logistics (50x50, orange) and construction (110x110, blue) zones and which roboports connect (O)">
+            <input type="checkbox" checked={showRobots} onChange={(e) => setShowRobots(e.target.checked)} /> Roboports
+          </label>
           <span className="sep" />
           {tool.kind === 'paste' && clip && (
             <span className="hand">
@@ -682,9 +709,12 @@ export function LayoutEditor({ onLayoutChange }: LayoutEditorProps) {
         <div className="editor-canvas" ref={hostRef} />
         <div className="editor-status">
           <span>{cursor ? `x ${cursor[0]}, y ${cursor[1]}` : ' '}</span>
-          <span>{layout.entities.length} buildings · {layout.water.length} water tiles</span>
+          <span>
+            {layout.entities.length} buildings · {layout.water.length} water tiles
+            {robots.roboports.length > 0 && ` · ${robots.roboports.length} roboports in ${robots.networks.length} network${robots.networks.length === 1 ? '' : 's'}`}
+          </span>
           <span className="msg">{message}</span>
-          <span className="hint">/ search · V view · drag to select · Ctrl+C/V copy · R rotate · Q pick · right-click remove · Space-drag pan</span>
+          <span className="hint">/ search · V view · O roboports · drag to select · Ctrl+C/V copy · R rotate · Q pick · right-click remove · Space-drag pan</span>
         </div>
       </div>
 

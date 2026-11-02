@@ -40,8 +40,8 @@ export interface Ghost {
 
 /** Extra drawing for the electric and logistics views. Coordinates are in tiles. */
 export interface ViewOverlay {
-  /** Filled areas drawn under the buildings (pole supply areas). */
-  areas?: { x0: number; y0: number; x1: number; y1: number; color: number; alpha: number }[];
+  /** Filled areas drawn under the buildings (pole supply areas, roboport zones). `outline` is a border width in screen pixels. */
+  areas?: { x0: number; y0: number; x1: number; y1: number; color: number; alpha: number; outline?: number }[];
   /** Lines drawn over the buildings (power wires). Width is in screen pixels, so wires stay visible when zoomed out. */
   lines?: { x1: number; y1: number; x2: number; y2: number; color: number; width: number }[];
   /** Dots at pole centres (wire anchors), radius in screen pixels. */
@@ -213,7 +213,7 @@ export class GridRenderer {
     for (let ty = Math.ceil(y0 / C) * C; ty <= y1; ty += C) grid.moveTo(x0 * TILE, ty * TILE).lineTo(x1 * TILE, ty * TILE);
     grid.stroke({ width: px * 1.5, color: COLORS.gridMajor, alpha: 0.35 });
 
-    if (this.view.lines?.length || this.view.dots?.length) this.drawViewOverlay();
+    if (this.view.lines?.length || this.view.dots?.length || this.view.areas?.some((a) => a.outline)) this.drawViewOverlay();
     // Labels are hidden when zoomed far out, where they would be unreadable.
     for (const child of this.entities.children) if (child instanceof Text) child.visible = zoom >= 0.45;
   }
@@ -305,8 +305,10 @@ export class GridRenderer {
     const over = this.viewOver.clear();
     const { areas, lines, tints, dim, dots, markers } = this.view;
     const z = this.camera.zoom;
-    for (const a of areas ?? [])
+    for (const a of areas ?? []) {
       under.rect(a.x0 * TILE, a.y0 * TILE, (a.x1 - a.x0) * TILE, (a.y1 - a.y0) * TILE).fill({ color: a.color, alpha: a.alpha });
+      if (a.outline) under.rect(a.x0 * TILE, a.y0 * TILE, (a.x1 - a.x0) * TILE, (a.y1 - a.y0) * TILE).stroke({ width: a.outline / z, color: a.color, alpha: 0.8 });
+    }
     if (dim?.size || tints?.length) {
       const byId = new Map(this.layout.entities.map((e) => [e.id, e]));
       if (dim?.size) {

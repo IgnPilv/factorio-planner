@@ -51,6 +51,7 @@ const GROUPS: { title: string; kinds: EntityKind[] }[] = [
   { title: 'Inserters and storage', kinds: ['inserter', 'chest', 'storage-tank'] },
   { title: 'Water and fluids', kinds: ['offshore-pump', 'pipe', 'pipe-to-ground', 'pump'] },
   { title: 'Power', kinds: ['pole', 'boiler', 'generator', 'solar-panel', 'accumulator', 'reactor', 'heat-exchanger', 'steam-turbine'] },
+  { title: 'Robots', kinds: ['roboport'] },
   { title: 'Mining and smelting', kinds: ['mining-drill', 'furnace'] },
   { title: 'Production', kinds: ['assembler', 'refinery', 'chemical-plant', 'centrifuge', 'lab', 'beacon', 'rocket-silo'] },
 ];
