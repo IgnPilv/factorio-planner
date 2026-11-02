@@ -1,7 +1,7 @@
 // Side panels: layout summary (power and production) and the quick search box.
 
 import { useEffect, useRef, useState } from 'react';
-import { layoutTotals, type EntityRate, type EntityState, type SteadyStateResult, type TransportState } from '../calc';
+import { bottlenecks, groupFlows, layoutTotals, type Bottleneck, type EntityRate, type PlacedEntity, type EntityState, type SteadyStateResult, type TransportState } from '../calc';
 import { gameData, wikiIconUrl } from '../data';
 import { ENTITIES } from './catalog';
 import { formatWatts, type PowerReport, type PowerStatus } from './power';
@@ -311,6 +311,87 @@ export function SimSummary({ sim }: { sim: SteadyStateResult | null }) {
         <p key={w} className="muted small">{w}</p>
       ))}
       <p className="muted small">The Logistics view (V) colours machines by status and belts by load.</p>
+    </section>
+  );
+}
+
+const BOTTLENECK_TEXT: Record<Bottleneck['kind'], string> = {
+  missing: 'nothing delivers',
+  starved: 'starved',
+  'output-blocked': 'output blocked',
+  power: 'short of power',
+  transport: 'running full, carrying',
+};
+
+/** What holds the layout back, worst first; click a row to select those buildings. */
+export function Bottlenecks({ sim, entities, onSelect }: { sim: SteadyStateResult | null; entities: readonly PlacedEntity[]; onSelect: (ids: string[]) => void }) {
+  if (!sim) return null;
+  const list = bottlenecks(sim, entities);
+  if (!list.length) return null;
+  return (
+    <section className="summary-section">
+      <h4>Bottlenecks</h4>
+      <ul className="bottlenecks">
+        {list.slice(0, 12).map((b) => {
+          const what = ENTITIES[b.entity]?.displayName ?? b.entity;
+          const items = b.items.map(displayNameOf).join(', ');
+          return (
+            <li key={`${b.kind}|${b.entity}|${b.recipe}|${b.items.join()}`}>
+              <button className="link" onClick={() => onSelect(b.ids)} title="Select these buildings">
+                {b.ids.length} × {what}
+                {b.recipe && b.kind !== 'transport' && <> ({displayNameOf(b.recipe)})</>}
+              </button>{' '}
+              <span className={b.kind === 'output-blocked' ? 'muted' : 'warn'}>
+                {BOTTLENECK_TEXT[b.kind]}
+                {items && ` ${items}`}
+              </span>
+              {b.lost > 0.005 && <span className="muted small"> · {fmtRate(b.lost)} {Math.abs(b.lost - 1) < 0.005 ? "machine's" : "machines'"} worth lost</span>}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="muted small">Click a row to select those buildings. Full belts and inserters are listed when they carry something a starved machine is short of.</p>
+    </section>
+  );
+}
+
+/** Net in and out of the selected buildings, as built. */
+export function SelectionFlows({ sim, ids }: { sim: SteadyStateResult | null; ids: string[] }) {
+  if (!sim) return null;
+  const g = groupFlows(sim, ids);
+  if (!g.machines) return null;
+  return (
+    <section className="summary-section">
+      <h4>Selection as built</h4>
+      <p className="small">
+        {g.machines} machine{g.machines === 1 ? '' : 's'}
+        {g.slowed > 0 && <span className="warn"> · {g.slowed} below full speed</span>}
+        {g.powerW > 0 && <> · {formatWatts(g.powerW)}</>}
+      </p>
+      {g.net.length > 0 && (
+        <table className="flows">
+          <thead>
+            <tr>
+              <th />
+              <th>/min</th>
+              <th title="Yellow belts' worth (15 items/s); fluids in units">belts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {g.net.map((f) => {
+              const fluid = gameData.items[f.name]?.type === 'fluid';
+              return (
+                <tr key={f.name} className={f.perSecond < 0 ? 'neg' : ''}>
+                  <td>{displayNameOf(f.name)}</td>
+                  <td>{f.perSecond > 0 ? '+' : ''}{fmtRate(f.perSecond * 60)}</td>
+                  <td className="muted">{fluid ? '' : fmtRate(Math.abs(f.perSecond) / YELLOW_BELT)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      <p className="muted small">Negative means the selection needs it from outside.</p>
     </section>
   );
 }

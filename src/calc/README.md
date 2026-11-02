@@ -64,3 +64,8 @@ splitter and chest, and nothing moves faster than its limit.
 - Status: a machine below 99.9% is `output-blocked` when it could run faster
   with free disposal of its outputs, `starved` otherwise (with `missing`
   listing inputs that nothing delivers), `low-power` when its network is maxed.
+
+## Summaries (`summary.ts`)
+
+- `groupFlows(sim, ids?)`: net items/s of a set of buildings at the speed they actually run (outputs +, inputs −), their power draw, and how many run below full speed. The editor shows it for a multi-building selection.
+- `bottlenecks(sim, entities)`: what holds the layout back, worst first. Machines are grouped by building, recipe and reason (nothing delivers an input, short of power, starved, output blocked), ranked by machine-equivalents of speed lost. Belts and inserters running at ≥99% are listed when they carry an input of a starved machine, since those are the likely cause. This is a heuristic: it matches by item, not by tracing the exact path.
