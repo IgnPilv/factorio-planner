@@ -8,6 +8,9 @@ Game data comes from Wube's official prototype files
 ([wube/factorio-data](https://github.com/wube/factorio-data)), the same source the
 [Factorio wiki](https://wiki.factorio.com) infoboxes are built from.
 
+Live site: https://ignpilv.github.io/factorio-planner/ (main). Every pull request also gets a
+preview at `https://ignpilv.github.io/factorio-planner/pr-preview/pr-<number>/`, linked in a PR comment.
+
 ## Develop
 
 ```sh
@@ -16,6 +19,20 @@ npm run dev        # local dev server
 npm test           # unit tests
 npm run build      # type-check and production build
 ```
+
+## Game data
+
+`data/nauvis.json` is generated from the game's prototype files and committed, so the app needs
+no network access to game data. To refresh it for a new Factorio release:
+
+```sh
+git clone --depth 1 https://github.com/wube/factorio-data .factorio-data
+npm run extract-data -- .factorio-data
+npm test
+```
+
+The extractor reads the Lua files as text and never runs them. Types for the generated file are
+in `src/data/types.ts`. Icons are loaded from the Factorio wiki.
 
 ## Layout
 
