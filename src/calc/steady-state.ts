@@ -57,6 +57,8 @@ export interface TransportState {
   items: Flow[];
   /** Belts, undergrounds and splitters: what each lane carries, seen facing the way the belt moves. */
   lanes?: { left: Flow[]; right: Flow[] };
+  /** Electric inserters: share of full speed their power network gives (0 when no pole reaches them). Absent at full power. */
+  powerShare?: number;
 }
 
 export interface PowerState {
@@ -552,6 +554,7 @@ export function simulateLayout(
   }
 
   // --- Inserters ---------------------------------------------------------
+  const electricInserters: PoweredLink[] = [];
   for (const q of placed) {
     if (q.e.kind !== 'inserter') continue;
     const reach = inserterReach(q.e);
@@ -580,6 +583,7 @@ export function simulateLayout(
       to = `${drop.node}:${near ? otherLane(near) : 'R'}`;
     }
     for (const from of froms) edges.push({ id: `ins:${q.p.id}:${from}`, from, to, capRow, accept, reject, report: q.p.id });
+    if (q.e.energySource === 'electric') electricInserters.push({ q, capRow, capacity });
   }
 
   // --- Drills drop onto the tile in front ---------------------------------
@@ -606,6 +610,21 @@ export function simulateLayout(
 
   // --- Power -------------------------------------------------------------
   const powerNets = buildPowerNetworks(placed, machines);
+  // Electric inserters run off the same networks; one no pole reaches never moves.
+  const insertersOn = new Map<string, PoweredLink[]>();
+  if (powerNets.modelled) {
+    for (const link of electricInserters) {
+      const net = powerNets.netOf(link.q);
+      if (!net) {
+        capacities.set(link.capRow, 0);
+        transport[link.q.p.id]!.powerShare = 0;
+        continue;
+      }
+      let l = insertersOn.get(net);
+      if (!l) insertersOn.set(net, (l = []));
+      l.push(link);
+    }
+  }
 
   // --- Which items can reach each node ------------------------------------
   const reach = new Map<NodeId, Set<string>>();
@@ -765,9 +784,14 @@ export function simulateLayout(
   // share (satisfaction), so they all slow down alike, rather than the LP
   // feeding some fully and starving others.
   if (solution.status === 'optimal' && powerNets.modelled) {
-    const caps = evenPowerShares(solution.variables, machines, powerNets.nets, constraints, variables);
-    if (caps.size) {
-      for (const [id, cap] of caps) constraints[`u:${id}`] = { max: Math.min(1, cap) };
+    const shares = evenPowerShares(solution.variables, machines, powerNets.nets, insertersOn, constraints, variables);
+    if (shares.size) {
+      applyPowerShares(shares, machines, insertersOn, constraints);
+      for (const [net, s] of shares) for (const link of insertersOn.get(net) ?? []) {
+        const t = transport[link.q.p.id]!;
+        t.capacity = link.capacity * s;
+        t.powerShare = s;
+      }
       solution = solve({ direction: 'maximize', objective: 'obj', constraints, variables });
     }
   }
@@ -1019,17 +1043,40 @@ function pickResearch(data: GameData, packs: Set<string>, wanted?: string): Tech
   return researchChoices(data, packs)[0];
 }
 
+/** An electric inserter's capacity row, and its capacity at full power. */
+interface PoweredLink {
+  q: Placed;
+  capRow: string;
+  capacity: number;
+}
+
+/** Caps every electric machine and inserter on each short network at its share of full speed. */
+function applyPowerShares(
+  shares: Map<string, number>,
+  machines: Map<string, MachineInfo>,
+  insertersOn: Map<string, PoweredLink[]>,
+  constraints: Record<string, Constraint>,
+) {
+  for (const [net, s] of shares) {
+    const share = Math.min(1, s);
+    for (const m of machines.values())
+      if (m.electric && m.powerNet === net && m.rate.powerW > 0) constraints[`u:${m.q.p.id}`] = { max: share };
+    for (const link of insertersOn.get(net) ?? []) if (constraints[link.capRow]) constraints[link.capRow] = { max: link.capacity * share };
+  }
+}
+
 /**
- * Power satisfaction per short network, as activity caps for its electric
- * consumers. A network is short when the machines on it would use more than
- * the generation the first solve could get. Its share s is found by bisection
- * so that, with every consumer capped at s and power not limiting, demand
- * equals that generation.
+ * Power satisfaction per short network. A network is short when the machines
+ * on it would use more than the generation the first solve could get. Its
+ * share s is found by bisection so that, with every consumer on it (machines
+ * and inserters alike) slowed to s and power not limiting, demand equals that
+ * generation.
  */
 function evenPowerShares(
   first: [string, number][],
   machines: Map<string, MachineInfo>,
   nets: string[],
+  insertersOn: Map<string, PoweredLink[]>,
   constraints: Record<string, Constraint>,
   variables: Record<string, Coefficients>,
 ): Map<string, number> {
@@ -1048,7 +1095,7 @@ function evenPowerShares(
   for (const [row, c] of Object.entries(constraints)) if (!row.startsWith('pow:')) free[row] = c;
   const solveCapped = (caps: Map<string, number>) => {
     const cons = { ...free };
-    for (const [net, cap] of caps) for (const m of consumersOf(net)) cons[`u:${m.q.p.id}`] = { max: Math.min(1, cap) };
+    applyPowerShares(caps, machines, insertersOn, cons);
     const r = solve({ direction: 'maximize', objective: 'obj', constraints: cons, variables });
     return r.status === 'optimal' ? new Map(r.variables) : undefined;
   };
@@ -1067,9 +1114,7 @@ function evenPowerShares(
       else lo.set(n, mid.get(n)!);
     }
   }
-  const caps = new Map<string, number>();
-  for (const n of short) for (const m of consumersOf(n)) caps.set(m.q.p.id, lo.get(n)!);
-  return caps;
+  return lo;
 }
 
 function blankTransport(kind: TransportState['kind'], capacity: number): TransportState {
@@ -1248,12 +1293,13 @@ function buildFluidNetworks(
 function buildPowerNetworks(placed: Placed[], machines: Map<string, MachineInfo>) {
   const generators = [...machines.values()].filter((m) => m.rate.powerW < 0);
   const nets: string[] = [];
-  if (generators.length === 0) return { modelled: false, nets };
+  let netOf: (q: Placed) => string | undefined = () => undefined;
+  if (generators.length === 0) return { modelled: false, nets, netOf };
   const poles = placed.filter((q) => q.e.kind === 'pole');
   if (poles.length === 0) {
     nets.push('all');
     for (const m of machines.values()) m.powerNet = 'all';
-    return { modelled: true, nets };
+    return { modelled: true, nets, netOf: () => 'all' };
   }
   const parent = new Map<string, string>();
   const find = (a: string): string => {
@@ -1272,20 +1318,18 @@ function buildPowerNetworks(placed: Placed[], machines: Map<string, MachineInfo>
       const reach = Math.min(a.e.wireReach ?? 0, b.e.wireReach ?? 0);
       if (Math.hypot(ax - bx, ay - by) <= reach + 1e-9) parent.set(find(a.p.id), find(b.p.id));
     }
-  for (const m of machines.values()) {
-    const q = m.q;
+  netOf = (q: Placed) => {
     for (const p of poles) {
       const [cx, cy] = centre(p);
       const r = p.e.supplyAreaDistance ?? 0;
-      if (q.x < cx + r && cx - r < q.x + q.w && q.y < cy + r && cy - r < q.y + q.h) {
-        m.powerNet = find(p.p.id);
-        break;
-      }
+      if (q.x < cx + r && cx - r < q.x + q.w && q.y < cy + r && cy - r < q.y + q.h) return find(p.p.id);
     }
-  }
+    return undefined;
+  };
+  for (const m of machines.values()) m.powerNet = netOf(m.q);
   for (const p of poles) {
     const r = find(p.p.id);
     if (!nets.includes(r)) nets.push(r);
   }
-  return { modelled: true, nets };
+  return { modelled: true, nets, netOf };
 }

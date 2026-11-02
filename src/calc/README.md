@@ -85,7 +85,10 @@ splitter and chest, and nothing moves faster than its limit.
   uncovered machines get no power. A short network slows all its machines
   alike, as the game's power satisfaction does: every electric consumer on it
   is capped at the same share s, found by bisection so that demand with that cap
-  equals the generation available.
+  equals the generation available. Electric inserters share it too: on a short
+  network their capacity is scaled by s (`powerShare` on their transport
+  state), and one no pole reaches moves nothing (`powerShare` 0, listed as an
+  `unpowered` bottleneck). Inserter energy use itself is not counted in demand.
   Power-plant parts only run as hard as demand needs.
 - **Chests** absorb whatever reaches them; a chest whose `recipe` names an
   item is an unlimited supply of it. Labs absorb science packs.

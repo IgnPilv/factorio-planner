@@ -39,6 +39,18 @@ describe('bottlenecks', () => {
     expect(full).toMatchObject({ entity: 'inserter', items: ['iron-plate'], ids: ['in'] });
   });
 
+  it('lists electric inserters no pole reaches', () => {
+    const ents = [
+      e('sun', 'solar-panel', 0, 10),
+      e('pole', 'small-electric-pole', 3, 10),
+      ...starvedLine,
+    ];
+    const list = bottlenecks(simulateLayout({ entities: ents }, data), ents);
+    const unpowered = list.find((b) => b.kind === 'unpowered');
+    expect(unpowered).toMatchObject({ entity: 'inserter' });
+    expect(unpowered!.ids.sort()).toEqual(['in', 'out']);
+  });
+
   it('lists missing inputs first and groups identical machines', () => {
     const ents = [
       e('a1', 'assembling-machine-2', 0, 0, 0, 'electronic-circuit'),

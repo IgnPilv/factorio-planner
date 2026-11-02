@@ -35,7 +35,7 @@ export function groupFlows(sim: SteadyStateResult, ids?: Iterable<string>): Grou
   return { net: sumFlows(flows, 1e-6).sort((a, b) => b.perSecond - a.perSecond), powerW, machines, slowed };
 }
 
-export type BottleneckKind = 'missing' | 'starved' | 'output-blocked' | 'power' | 'transport';
+export type BottleneckKind = 'missing' | 'unpowered' | 'starved' | 'output-blocked' | 'power' | 'transport';
 
 export interface Bottleneck {
   kind: BottleneckKind;
@@ -90,6 +90,12 @@ export function bottlenecks(sim: SteadyStateResult, entities: readonly PlacedEnt
   }
 
   for (const [id, t] of Object.entries(sim.transport)) {
+    // Electric inserters no pole reaches: they never move.
+    if (t.powerShare === 0) {
+      const e = byId.get(id);
+      if (e) add(`unpowered|${e.name}`, { kind: 'unpowered', entity: e.name, items: [] }, id, 0);
+      continue;
+    }
     if (t.utilization < 0.99 || t.perSecond <= 0) continue;
     const e = byId.get(id);
     if (!e) continue;
@@ -98,8 +104,8 @@ export function bottlenecks(sim: SteadyStateResult, entities: readonly PlacedEnt
     add(`transport|${e.name}|${items.join(',')}`, { kind: 'transport', entity: e.name, items }, id, 0);
   }
 
-  const order: Record<BottleneckKind, number> = { missing: 0, power: 1, starved: 2, transport: 3, 'output-blocked': 4 };
+  const order: Record<BottleneckKind, number> = { missing: 0, unpowered: 1, power: 2, starved: 3, transport: 4, 'output-blocked': 5 };
   return [...groups.values()]
-    .filter((g) => g.kind === 'transport' || g.lost > 1e-3)
+    .filter((g) => g.kind === 'transport' || g.kind === 'unpowered' || g.lost > 1e-3)
     .sort((a, b) => order[a.kind] - order[b.kind] || b.lost - a.lost || b.ids.length - a.ids.length);
 }
