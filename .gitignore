@@ -1,4 +1,5 @@
 node_modules
 dist
 *.tsbuildinfo
-.factorio-data
+public/map-viewer-export_*.zip
+public/mod.json

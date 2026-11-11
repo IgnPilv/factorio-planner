@@ -1,0 +1,10 @@
+{
+  "name": "map-viewer-export",
+  "version": "0.1.0",
+  "title": "Map Viewer Export",
+  "author": "IgnPilv",
+  "homepage": "https://ignpilv.github.io/factorio-planner/",
+  "description": "Exports every surface (planets and space platforms) so the Factorio Map Viewer website can draw a zoomable map of your save. Press Ctrl + Alt + M (or type /map-export), then save and drop the save on the website.",
+  "factorio_version": "2.1",
+  "dependencies": ["base >= 2.0.0"]
+}
