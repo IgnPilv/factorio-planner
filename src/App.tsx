@@ -188,6 +188,7 @@ function Viewer({ map, name, onOpen, onClose }: { map: MapExport; name: string; 
           <p className="small dim">
             {icons ? `${icons} icons loaded from your game. ` : 'The site can\'t ship the game\'s art. '}
             Point it at your Factorio install folder once and icons are kept in this browser.
+            For icons from other mods, load again and pick your user data folder (Windows: <code>%APPDATA%\Factorio</code>).
           </p>
           <div className="row">
             {canPickDirectory()

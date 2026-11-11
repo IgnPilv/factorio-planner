@@ -27,7 +27,7 @@ The export format is described at the top of `mod/map-viewer-export/control.lua`
 
 Icons: Wube's terms don't allow redistributing the game's art, so the site ships none. **Load
 icons…** lets you pick your Factorio install folder; the browser reads only the icon files the map
-uses (base, space-age, quality, elevated-rails), and keeps them in IndexedDB (`src/icons.ts`).
+uses (base, space-age, quality, elevated-rails, and installed mods when you pick your user data folder), and keeps them in IndexedDB (`src/icons.ts`).
 Until then buildings are drawn in their map colours.
 
 ## Develop
