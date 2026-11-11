@@ -8,8 +8,11 @@
 // Until then the map draws coloured blocks.
 //
 // Paths look like "__space-age__/graphics/icons/foundry.png"; the mod reports one
-// per entity and recipe in the export. Icons from the game's own folders (base,
-// core, space-age, quality, elevated-rails) load; mods installed as zips don't yet.
+// per entity and recipe in the export. Icons come from the game's own folders
+// (base, core, space-age, quality, elevated-rails) and from installed mods, zipped
+// or unpacked, in the user data folder's `mods`.
+
+import { strFromU8, unzipSync } from 'fflate';
 
 /** Size icons are stored and drawn at (Factorio's own item icon size). */
 export const ICON_SIZE = 64;
@@ -153,23 +156,76 @@ async function store(files: Map<string, () => Promise<Blob>>): Promise<LoadResul
   return { found: loaded.size, needed: needed.size };
 }
 
-/** From an <input type="file" webkitdirectory> selection. */
-export function loadIconsFromFiles(list: FileList | File[]): Promise<LoadResult> {
+/** Mod name from a zip's or folder's name: "Krastorio2_2.0.3" -> "Krastorio2". */
+export function modNameOf(fileName: string): string {
+  return fileName.replace(/\.zip$/i, '').replace(/_\d+\.\d+\.\d+$/, '');
+}
+
+/**
+ * The wanted icons inside one mod zip. Mod zips hold a single top folder
+ * (usually name_version) with info.json; "__name__/graphics/x.png" lives at
+ * "<top>/graphics/x.png". Only matching entries are inflated.
+ */
+export function modZipIcons(zip: Uint8Array, fileName: string, want: Set<string>): Map<string, Uint8Array> {
+  const out = new Map<string, Uint8Array>();
+  let name = modNameOf(fileName);
+  const prefix = () => `__${name}__/`;
+  // info.json names the mod for sure; read it first, it is tiny.
+  try {
+    const info = unzipSync(zip, { filter: (f) => /^[^/]+\/info\.json$/.test(f.name) });
+    const text = Object.values(info)[0];
+    if (text) name = (JSON.parse(strFromU8(text)) as { name?: string }).name ?? name;
+  } catch { /* fall back to the file name */ }
+  if (![...want].some((p) => p.startsWith(prefix()))) return out;
+  const files = unzipSync(zip, {
+    filter: (f) => {
+      const rest = f.name.slice(f.name.indexOf('/') + 1);
+      return want.has(prefix() + rest);
+    },
+  });
+  for (const [path, data] of Object.entries(files)) out.set(prefix() + path.slice(path.indexOf('/') + 1), data);
+  return out;
+}
+
+async function zipIntoFiles(files: Map<string, () => Promise<Blob>>, file: File) {
+  const want = new Set([...neededIconPaths()].filter((p) => !files.has(p)));
+  if (!want.size) return;
+  try {
+    const found = modZipIcons(new Uint8Array(await file.arrayBuffer()), file.name, want);
+    for (const [p, data] of found) files.set(p, async () => new Blob([data as BlobPart], { type: 'image/png' }));
+  } catch { /* not a readable zip */ }
+}
+
+/** From an <input type="file" webkitdirectory> selection (game folder or mods folder). */
+export async function loadIconsFromFiles(list: FileList | File[]): Promise<LoadResult> {
   const files = new Map<string, () => Promise<Blob>>();
+  const zips: File[] = [];
   for (const f of Array.from(list)) {
+    const rel = (f.webkitRelativePath || f.name).replace(/\\/g, '/');
+    if (f.name.endsWith('.zip') && /(^|\/)mods\/[^/]+$/.test(rel)) { zips.push(f); continue; }
     if (!f.name.endsWith('.png')) continue;
-    const p = gamePathOf(f.webkitRelativePath || f.name);
+    const parts = rel.split('/');
+    const m = parts.indexOf('mods');
+    // Unpacked mod: mods/<name_version>/graphics/...
+    const p = m >= 0 && parts[m + 2] === 'graphics'
+      ? `__${modNameOf(parts[m + 1])}__/${parts.slice(m + 2).join('/')}`
+      : gamePathOf(rel);
     if (p) files.set(p, async () => f);
+  }
+  for (const z of zips) {
+    if ([...neededIconPaths()].some((p) => p.startsWith(`__${modNameOf(z.name)}__/`))) await zipIntoFiles(files, z);
   }
   return store(files);
 }
 
 // Minimal typing for the File System Access API (Chromium only).
+interface FileHandle { kind: 'file'; name: string; getFile(): Promise<File> }
 interface DirHandle {
   kind: 'directory';
   name: string;
   getDirectoryHandle(name: string): Promise<DirHandle>;
-  getFileHandle(name: string): Promise<{ getFile(): Promise<File> }>;
+  getFileHandle(name: string): Promise<FileHandle>;
+  values(): AsyncIterable<DirHandle | FileHandle>;
 }
 type DirPicker = (opts?: { id?: string; mode?: 'read' }) => Promise<DirHandle>;
 
@@ -183,9 +239,38 @@ async function sub(dir: DirHandle, path: string[]): Promise<DirHandle | undefine
   return d;
 }
 
+/** Mods that ship inside the game's own data folder. */
+const GAME_MODS = new Set(['base', 'core', 'space-age', 'quality', 'elevated-rails']);
+
+/** Icons from a `mods` folder: zipped mods and unpacked ones. */
+async function addModsFolder(files: Map<string, () => Promise<Blob>>, mods: DirHandle) {
+  const want = () => [...neededIconPaths()].filter((p) => !files.has(p));
+  for await (const entry of mods.values()) {
+    if (entry.kind === 'file') {
+      // Mod portal zips are named name_version.zip; skip zips holding nothing we need.
+      if (entry.name.endsWith('.zip') && want().some((p) => p.startsWith(`__${modNameOf(entry.name)}__/`))) {
+        await zipIntoFiles(files, await entry.getFile());
+      }
+      continue;
+    }
+    const name = modNameOf(entry.name);
+    for (const path of want()) {
+      const prefix = `__${name}__/`;
+      if (!path.startsWith(prefix)) continue;
+      const segs = path.slice(prefix.length).split('/');
+      files.set(path, async () => {
+        const folder = await sub(entry, segs.slice(0, -1));
+        if (!folder) throw new Error('missing');
+        return (await folder.getFileHandle(segs[segs.length - 1])).getFile();
+      });
+    }
+  }
+}
+
 /**
- * Asks for the game folder with the directory picker and reads only the needed files
- * by path. Accepts the install folder, its `data` folder, or `data/base`.
+ * Asks for a folder with the directory picker and reads only the needed files by path.
+ * Accepts the install folder, its `data` folder or `data/base` for the game's icons,
+ * and the user data folder or its `mods` folder for mods' icons.
  */
 export async function pickAndLoadIcons(): Promise<LoadResult> {
   const w = window as unknown as { showDirectoryPicker: DirPicker };
@@ -199,7 +284,7 @@ export async function pickAndLoadIcons(): Promise<LoadResult> {
   const files = new Map<string, () => Promise<Blob>>();
   for (const path of neededIconPaths()) {
     const m = /^__([\w-]+)__\/(.+)$/.exec(path);
-    if (!m) continue;
+    if (!m || !GAME_MODS.has(m[1])) continue;
     // Without a data folder, accept a picked base/ (or its graphics/) folder for base icons.
     const parts = m[2].split('/');
     const tries: [DirHandle | undefined, string[]][] = data
@@ -214,5 +299,8 @@ export async function pickAndLoadIcons(): Promise<LoadResult> {
       throw new Error('missing');
     });
   }
+  // Mods: the picked folder is a mods folder, or holds one (user data folder).
+  const mods = (await sub(dir, ['mods'])) ?? (dir.name.toLowerCase() === 'mods' ? dir : undefined);
+  if (mods) await addModsFolder(files, mods);
   return store(files);
 }
